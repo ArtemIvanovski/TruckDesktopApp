@@ -1,0 +1,1970 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta http-equiv="Content-Type"content="text/html; charset=utf-8"/>
+  <title>Boxes</title>
+  <script src="bab/24/dat.gui.min.js"></script><script src="bab/24/babylon.js"></script><script src="bab/24/babylonjs.materials.min.js"></script><script src="bab/24/babylonjs.loaders.js"></script><script src="bab/24/babylon.gui.min.js"></script><script src="jquery-1.11.1.js"></script>
+  <script type='text/javascript' src="../login/checkIsTokenValid.js"></script>
+  <style>html,body{overflow:hidden;width:100%;height:100%;margin:0;padding:0;}#renderCanvas{width:100%;height:100%;touch-action:none;}#canvasZone{width:100%;height:100%;}</style>
+  <style>
+    html,
+    body {
+      overflow: hidden;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+    }
+
+    #renderCanvas {
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+    }
+
+    #canvasZone {
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+</head>
+<style>
+  body {
+     background-color: #262626;
+  }
+
+  .exit-bar {
+     display: flex;
+     justify-content: end;
+     padding: 5px;
+
+     position: fixed;
+     bottom: 0;
+     right: 0;
+
+     .exit-bar_button {
+        color: #fff;
+        background-color: #7796b4;
+        border-color: #7796b4;
+        padding: 10px 20px;
+        border-radius: 5px;
+        cursor: pointer;
+     }
+  }
+</style>
+<body>
+  <div class="exit-bar">
+    <button class="exit-bar_button" onclick="exitAndRedirect()">Выход</button>
+  </div>
+  <div id="canvasZone"><canvas id="renderCanvas"></canvas></div>
+  
+  <script>
+    var canvas = document.getElementById("renderCanvas");
+
+    var startRenderLoop = function (engine, canvas) {
+      engine.runRenderLoop(function () {
+        if (sceneToRender && sceneToRender.activeCamera) {
+          sceneToRender.render();
+        }
+      });
+    }
+
+    var engine = null;
+    var scene = null;
+    var sceneToRender = null;
+    var createDefaultEngine = function () { return new BABYLON.Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true, disableWebGL2Support: false }); };
+
+
+    BABYLON.AbstractMesh.prototype.spin = function (axis, rads, speed) {
+      var ease = new BABYLON.CubicEase();
+      ease.setEasingMode(BABYLON.EasingFunction.EASINGMODE_EASEINOUT);
+      BABYLON.Animation.CreateAndStartAnimation('at4', this, 'rotation.' + axis, speed, 120, this.rotation[axis], this.rotation[axis] + rads, 0, ease);
+    }
+
+    var createScene = async function () {
+      engine.setHardwareScalingLevel(0.5);
+
+      var scene = new BABYLON.Scene(engine);
+      scene.clearColor = new BABYLON.Color3(0.35, 0.35, 0.35);
+      var camera = new BABYLON.ArcRotateCamera("Camera", Math.PI / 2, Math.PI / 3, 2000, new BABYLON.Vector3(0, 300, 0), scene);
+      //  camera.setPosition(new BABYLON.Vector3(Math.PI / 2, Math.PI / 4, 2000));
+
+      camera.attachControl(canvas, true);
+      //      camera.zoomToMouseLocation = true;
+      camera.wheelDeltaPercentage = 0.02;
+      camera.panningSensibility = 5;
+
+
+      // camera.lowerBetaLimit = 0.1;
+      //  camera.upperBetaLimit = 2;
+      camera.lowerRadiusLimit = 150;
+      camera.upperRadiusLimit = 3500;
+      //  camera.upperBetaLimit = Math.PI / 2.2;
+
+      camera.upperBetaLimit = (Math.PI / 2) * 0.99;
+
+      // Light
+      const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(-1, 1, -1));
+      light.intensity = 1.5;
+
+
+      //Materials
+      var groundMaterial = new BABYLON.GridMaterial("groundMaterial", scene);
+      groundMaterial.majorUnitFrequency = 1;
+      //	groundMaterial.minorUnitVisibility = 0.9;
+      groundMaterial.gridRatio = 100;
+      groundMaterial.opacity = 0.0;
+      groundMaterial.useMaxLine = true;
+
+
+      /*************************************Meshes****************************************/
+
+      //truck
+      let alphaMatTruck = 0.3;
+      truckMaterial = new BABYLON.StandardMaterial("boxMat", scene);
+      truckMaterial.diffuseColor = new BABYLON.Color3(0.4, 0.4, 0.4, 0.1);
+      truckMaterial.emissiveColor = new BABYLON.Color3(1, 1, 1);
+      truckMaterial.alpha = alphaMatTruck;
+
+      //floor
+      let alphaMatFloor = 0.4;
+      floorMaterial = new BABYLON.StandardMaterial("boxMat", scene);
+      floorMaterial.diffuseColor = new BABYLON.Color3(0.4, 0.4, 0.4, 0.1);
+      floorMaterial.emissiveColor = new BABYLON.Color3(1, 1, 1);
+      floorMaterial.alpha = alphaMatFloor;
+
+
+      let truckWidth = 1650;
+      let truckHeight = 260;
+      let truckDepth = 245;
+
+      let floorWidth = 1650;
+      let floorHeight = -10;
+      let floorDepth = 245;
+
+
+      let truck = BABYLON.MeshBuilder.CreateBox("truck", { width: truckWidth + 1, height: truckHeight + 1, depth: truckDepth + 1 }, scene);
+      truck.position = new BABYLON.Vector3(0, truckHeight / 2, 0);
+      truck.isPickable = false;
+      truck.material = truckMaterial;
+      truck.material.backFaceCulling = false;
+      //   truck.showBoundingBox = true;
+      truck.enableEdgesRendering();
+      truck.edgesWidth = 200.0;
+      truck.edgesColor = new BABYLON.Color4(0, 0, 0, 0.5);
+
+      let floor = BABYLON.MeshBuilder.CreateBox("floor", { width: floorWidth, height: floorHeight, depth: floorDepth }, scene);
+      floor.position = new BABYLON.Vector3(0, floorHeight / 2, 0);
+      floor.isPickable = false;
+      floor.material = floorMaterial;
+      floor.material.backFaceCulling = false;
+
+      var isTentOpen = false;
+
+      let lorryWeelX = truck.getBoundingInfo().boundingBox.maximum.x; // move lorry and weel
+
+      let weelPosition = 50;
+      let boxWeelMove = BABYLON.MeshBuilder.CreateBox("boxWeelMove", {}, scene); // for moving weel
+      boxWeelMove.position = new BABYLON.Vector3(weelPosition - lorryWeelX, -150, 0);
+
+      let weel = BABYLON.SceneLoader.ImportMeshAsync("", "", ".//weel.glb", scene).then((resultWeel) => {
+        resultWeel.meshes[0].scaling = new BABYLON.Vector3(-100, -100, -100, true);
+        resultWeel.meshes[0].rotation = new BABYLON.Vector3(0, 0, Math.PI);
+        resultWeel.meshes[0].position = new BABYLON.Vector3(weelPosition - lorryWeelX, -125, 0);
+        resultWeel.meshes[0].setParent(boxWeelMove);
+
+        resultWeel.meshes[0].getDescendants().forEach((mesh) => {
+          mesh.isPickable = false;
+        })
+      });
+
+      let lorryPosition = -400;
+      let boxLorryMove = BABYLON.MeshBuilder.CreateBox("boxWeelMove", {}, scene); // for moving lorry
+      boxLorryMove.position = new BABYLON.Vector3(lorryPosition + lorryWeelX, -150, 0);
+
+
+      let lorry = BABYLON.SceneLoader.ImportMeshAsync(null, "", ".//lorry.glb", scene).then((model) => {
+        model.meshes[0].scaling = new BABYLON.Vector3(-100, -100, -100);
+        model.meshes[0].rotation = new BABYLON.Vector3(0, 0, Math.PI);
+        model.meshes[0].position = new BABYLON.Vector3(lorryPosition + lorryWeelX, -125, 0);
+        model.meshes[0].setParent(boxLorryMove);
+
+        model.meshes[0].getDescendants().forEach((mesh) => {
+          mesh.isPickable = false;
+        })
+      });
+
+
+      // Ground
+      var ground = BABYLON.MeshBuilder.CreateGround("ground", { width: 4800, height: 4800 }, scene, false);
+      ground.material = groundMaterial;
+
+      var trucks = [];
+      var currentTruckIndex = 0;
+
+      ///////////Create dynamic texture start
+      var textureResolution = 512;
+
+
+      let textureGround = [];
+      let textureContext = [];
+      let materialGround = [];
+
+      //Add text to dynamic texture
+      var font = "bold 77px monospace";
+      ///////////Create dynamic texture end
+
+      let boxMat = [];
+
+      let boxWidth = [197, 197, 197, 122, 122, 150, 129, 129, 117, 105];
+      let boxHeight = [179, 179, 179, 122, 122, 155, 135, 110, 108, 127];
+      let boxDepth = [197, 197, 197, 197, 197, 150, 153, 152, 168, 155];
+      let boxName = ["PO#2457", "PO#2458", "PO#2459", "PO#2460", "PO#2461", "PO#2462", "PO#2463", "PO#2464", "PO#2465", "PO#2466"];
+      let boxWeight = [2, 2, 3, 3, 3, 4, 5, 6, 7, 8];
+
+      const boxColors = new Map();
+
+      //////////////////////// boxes size start
+
+      function color3ToHex(color) {
+        const r = Math.round(color.r * 255).toString(16).padStart(2, '0');
+        const g = Math.round(color.g * 255).toString(16).padStart(2, '0');
+        const b = Math.round(color.b * 255).toString(16).padStart(2, '0');
+        return `#${r}${g}${b}`;
+      }
+
+      function createTextSizeBoxes(font_size, planeHeight, text, x, y, z, al, be, ga, colorT) {
+        var font = "bold " + font_size + "px Impact";
+        var DTHeight = 1.5 * font_size;                    //Set height for dynamic texture or set as wished
+        var ratio = planeHeight / DTHeight;                  //Calcultae ratio
+        var temp = new BABYLON.DynamicTexture("DynamicTexture", 64, scene);
+        var tmpctx = temp.getContext();
+        tmpctx.font = font;
+        var DTWidth = tmpctx.measureText(text).width + 8;
+        var planeWidth = DTWidth * (ratio);      //Calculate width the plane has to be 
+        var dynamicTexture = new BABYLON.DynamicTexture("DynamicTexture", { width: DTWidth, height: DTHeight }, scene, false);
+        var mat = new BABYLON.StandardMaterial("mat", scene);
+        mat.diffuseTexture = dynamicTexture;
+        mat.specularColor = new BABYLON.Color3(0.1, 0.1, 0.1); // Убираем отражения
+        mat.emissiveColor = new BABYLON.Color3(0.3, 0.3, 0.3); // Убираем свечение
+        mat.diffuseTexture.hasAlpha = true;
+        dynamicTexture.drawText(text, null, null, font, "#000000", "rgba(0, 0, 0, 0)", true);
+        console.log(color3ToHex(colorT));
+        var plane = BABYLON.MeshBuilder.CreatePlane("plane", { width: planeWidth, height: planeHeight }, scene);
+        plane.position = new BABYLON.Vector3(x - 4, y, z + 4);
+        plane.rotation = new BABYLON.Vector3(al, be, ga);
+        plane.material = mat;
+        
+        return plane;
+      }
+
+      //////////////////////// boxes size end
+
+      // boxes Meshes
+      function randomIntFromInterval(min, max) { // min and max included
+        return Math.floor(Math.random() * (max - min + 1) + min);
+      }
+
+      let randomBox = [];
+      let randomBoxSum = 0;
+      let mCyrcle = 0;
+
+      function createBoxes(boxWidth_f, boxHeight_f, boxDepth_f, boxName_f, boxWeight_f) {
+        randomBoxSum = boxName.length; // summ of boxes            
+        for (let i = 0; i < randomBoxSum; i++) {
+          randomBox[mCyrcle] = BABYLON.MeshBuilder.CreateBox(`randomBox${mCyrcle}`, {
+            width: Math.ceil(boxWidth_f[i]), height: Math.ceil(boxHeight_f[i]), depth: Math.ceil(boxDepth_f[i]),
+          }, scene);
+          randomBox[mCyrcle].enableEdgesRendering();
+          randomBox[mCyrcle].edgesWidth = 50.0; // Ширина окантовки
+          randomBox[mCyrcle].edgesColor = new BABYLON.Color4(0, 0, 0, 1); // Черный цвет
+          randomBox[mCyrcle].truckIndex = null;
+          randomBox[mCyrcle].isShift = false;
+          randomBox[mCyrcle].isRotated = false;
+          randomBox[mCyrcle].weight = boxWeight_f[mCyrcle];
+
+          textureGround[mCyrcle] = new BABYLON.DynamicTexture("dynamic texture", { width: 512, height: 256 }, scene);
+          textureContext[mCyrcle] = textureGround[mCyrcle].getContext();
+          materialGround[mCyrcle] = new BABYLON.StandardMaterial("Mat", scene);
+          materialGround[mCyrcle].diffuseColor = new BABYLON.Color3(0.2, 0.2, 0.2);
+          materialGround[mCyrcle].specularColor = new BABYLON.Color3(0.2, 0.2, 0.2);
+
+          let boxColorKey = JSON.stringify([boxWidth[mCyrcle], boxDepth[mCyrcle], boxHeight[mCyrcle]]);
+
+          if (!boxColors.has(boxColorKey)) {
+            boxColors.set(boxColorKey, new BABYLON.Color3(Math.random(), Math.random(), Math.random()));
+          }
+
+          randomBox[mCyrcle].colorT = boxColors.get(boxColorKey);
+
+          materialGround[mCyrcle].emissiveColor = boxColors.get(boxColorKey);
+
+          materialGround[mCyrcle].diffuseTexture = textureGround[mCyrcle];
+          randomBox[mCyrcle].material = materialGround[mCyrcle];
+          randomBox[mCyrcle].material.diffuseTexture.drawText(`${boxName_f[mCyrcle]}`, 140, 100, font, "black", "white", true, true);
+
+          meshWidth = createTextSizeBoxes(30, boxWidth_f[i] / 5, boxWidth_f[i], 0, boxHeight_f[i] / 2 + 0.4, - boxDepth_f[i] / 2 + boxWidth_f[i] / 10, Math.PI / 2, Math.PI, 0, materialGround[mCyrcle].emissiveColor);
+          meshWidth.isPickable = false;
+          meshWidth.parent = randomBox[mCyrcle];
+
+          meshDepth = createTextSizeBoxes(30, boxDepth_f[i] / 5, boxDepth_f[i], boxWidth_f[i] / 2 - boxDepth_f[i] / 10, boxHeight_f[i] / 2 + 0.4, 0, Math.PI / 2, -Math.PI / 2, 0, materialGround[mCyrcle].emissiveColor);
+          meshDepth.isPickable = false;
+          meshDepth.parent = randomBox[mCyrcle];
+
+          var maxboxWidth_f = Math.max(...boxWidth_f);
+          var maxboxDepth_f = Math.max(...boxDepth);
+          randomBox[mCyrcle].position = new BABYLON.Vector3(maxboxWidth_f * (mCyrcle) / 4 - 500, boxHeight_f[i] / 2, maxboxDepth_f * (mCyrcle % 4) + 300);
+          mCyrcle = mCyrcle + 1;
+
+        }
+      }
+      createBoxes(boxWidth, boxHeight, boxDepth, boxName, boxWeight);
+
+      let sizeTextBlock;
+      /////////////////////  engine
+      var isShiftDown = false;
+
+      var startingPoint;
+      var currentMesh;
+
+      var getGroundPosition = function () {
+        var pickinfo = scene.pick(scene.pointerX, scene.pointerY, function (mesh) { return mesh == ground; });
+        if (pickinfo.hit) {
+          return pickinfo.pickedPoint;
+        }
+        return null;
+      }
+
+      var pointerDown = function (mesh) {
+        currentMesh = mesh;
+        startingPoint = getGroundPosition();
+        if (startingPoint) { // we need to disconnect camera from canvas
+          setTimeout(function () {
+            camera.detachControl(canvas);
+          }, 0);
+        }
+      }
+
+      var pointerUp = function () {
+        if (startingPoint) {
+          camera.attachControl(canvas, true);
+          startingPoint = null;
+          return;
+        }
+      }
+
+      var pointerMove = function () {
+        if (!startingPoint) {
+          return;
+        }
+        var current = getGroundPosition();
+        if (!current) {
+          return;
+        }
+
+        var diff = current.subtract(startingPoint);
+        currentMesh.position.addInPlace(diff);
+
+        const boxBoundingInfo = currentMesh.getBoundingInfo().boundingBox;
+
+        const currentMinX = boxBoundingInfo.minimumWorld.x;
+        const currentMaxX = boxBoundingInfo.maximumWorld.x;
+        const currentMinY = boxBoundingInfo.minimumWorld.y;
+        const currentMaxY = boxBoundingInfo.maximumWorld.y;
+        const currentMinZ = boxBoundingInfo.minimumWorld.z;
+        const currentMaxZ = boxBoundingInfo.maximumWorld.z;
+
+        if (current != startingPoint && isShiftDown) {        
+          let maxRight = null;
+          let maxLeft = null;
+          let maxTop = null;
+          let maxBottom = null;
+
+          for (const box of randomBox) {
+            if (box === currentMesh) continue;
+
+            const otherBoundingInfo = box.getBoundingInfo().boundingBox;
+            const otherMinX = otherBoundingInfo.minimumWorld.x;
+            const otherMaxX = otherBoundingInfo.maximumWorld.x;
+            const otherMinY = otherBoundingInfo.minimumWorld.y;
+            const otherMaxY = otherBoundingInfo.maximumWorld.y;
+            const otherMinZ = otherBoundingInfo.minimumWorld.z;
+            const otherMaxZ = otherBoundingInfo.maximumWorld.z;
+
+            if (
+              otherMinX - currentMaxX < 10 && 
+              otherMinX - currentMaxX > -5 &&
+              ((otherMaxZ >= currentMaxZ && otherMinZ <= currentMaxZ) ||
+              (otherMinZ <= currentMinZ && otherMaxZ >= currentMinZ) ||
+              (otherMinZ >= currentMinZ && otherMaxZ <= currentMaxZ)) &&
+              ((otherMinY <= currentMinY && otherMaxY >= currentMaxX) ||
+              (otherMinY >= currentMinY && otherMinY <= currentMaxY) ||
+              (otherMaxY >= currentMinY && otherMaxY <= currentMaxY))
+            ) {
+              let leftPos = 0
+
+              if (currentMesh.isRotated) {
+                leftPos = otherMinX - boxBoundingInfo.maximum.z;
+              } else {
+                leftPos = otherMinX - boxBoundingInfo.maximum.x;
+              }
+
+              if (leftPos < maxLeft || !maxLeft) {
+                maxLeft = leftPos;
+              }
+            } else if (
+              currentMinX - otherMaxX < 10 && 
+              currentMinX - otherMaxX > -5 &&
+              ((otherMaxZ >= currentMaxZ && otherMinZ <= currentMaxZ) ||
+              (otherMinZ <= currentMinZ && otherMaxZ >= currentMinZ) ||
+              (otherMinZ >= currentMinZ && otherMaxZ <= currentMaxZ)) &&
+              ((otherMinY <= currentMinY && otherMaxY >= currentMaxX) ||
+              (otherMinY >= currentMinY && otherMinY <= currentMaxY) ||
+              (otherMaxY >= currentMinY && otherMaxY <= currentMaxY))
+            ) {
+              let rightPos = 0
+
+              if (currentMesh.isRotated) {
+                rightPos = otherMaxX + boxBoundingInfo.maximum.z;
+              } else {
+                rightPos = otherMaxX + boxBoundingInfo.maximum.x;
+              }
+
+              if (rightPos > maxRight || !maxRight) {
+                maxRight = rightPos;
+              }
+            } else if (
+              otherMinZ - currentMaxZ < 10 && 
+              otherMinZ - currentMaxZ > -5 &&
+              ((otherMaxX >= currentMaxX && otherMinX <= currentMaxX) ||
+              (otherMinX <= currentMinX && otherMaxX >= currentMinX) ||
+              (otherMinX >= currentMinX && otherMaxX <= currentMaxX)) &&
+              ((otherMinY <= currentMinY && otherMaxY >= currentMaxX) ||
+              (otherMinY >= currentMinY && otherMinY <= currentMaxY) ||
+              (otherMaxY >= currentMinY && otherMaxY <= currentMaxY))
+            ) {
+              let topPos = 0
+
+              if (currentMesh.isRotated) {
+                topPos = otherMinZ - boxBoundingInfo.maximum.x;
+              } else {
+                topPos = otherMinZ - boxBoundingInfo.maximum.z;
+              }
+
+              if (topPos < maxTop || !maxTop) {
+                maxTop = topPos;
+              }
+            } else if (
+              currentMinZ - otherMaxZ < 10 && 
+              currentMinZ - otherMaxZ > -5 &&
+              ((otherMaxX >= currentMaxX && otherMinX <= currentMaxX) ||
+              (otherMinX <= currentMinX && otherMaxX >= currentMinX) ||
+              (otherMinX >= currentMinX && otherMaxX <= currentMaxX)) &&
+              ((otherMinY <= currentMinY && otherMaxY >= currentMaxX) ||
+              (otherMinY >= currentMinY && otherMinY <= currentMaxY) ||
+              (otherMaxY >= currentMinY && otherMaxY <= currentMaxY))
+            ) {
+              let bottomPos = 0
+
+              if (currentMesh.isRotated) {
+                bottomPos = otherMaxZ + boxBoundingInfo.maximum.x;
+              } else {
+                bottomPos = otherMaxZ + boxBoundingInfo.maximum.z;
+              }
+
+              if (bottomPos > maxBottom || !maxBottom) {
+                maxBottom = bottomPos;
+              }
+            }
+          }
+
+          if (maxRight) {
+            currentMesh.position.x = maxRight;
+          } else if (maxLeft) {
+            currentMesh.position.x = maxLeft;
+          }
+
+          if (maxTop) {
+            currentMesh.position.z = maxTop;
+          } else if (maxBottom) {
+            currentMesh.position.z = maxBottom;
+          }
+        }
+
+        if (/^randomBox\d+$/.test(currentMesh.name) && isBoxInsideTruck(currentMesh, truck)) {
+          currentMesh.truckIndex = currentTruckIndex;
+          setTrucked(0, currentMesh);
+        } else if (/^randomBox\d+$/.test(currentMesh.name)) {
+          currentMesh.truckIndex = null;
+          notTrucked(0, currentMesh);
+        }
+        startingPoint = current;
+      }
+
+      var showSize = function () {
+        inputText_box_Z.text = currentMesh.getBoundingInfo().boundingBox.maximum.z * 2;
+        inputText_box_Y.text = currentMesh.getBoundingInfo().boundingBox.maximum.y * 2;
+        inputText_box_X.text = currentMesh.getBoundingInfo().boundingBox.maximum.x * 2;
+        inputText_box_place.text = boxName[currentMesh.name.slice(currentMesh.name.lastIndexOf('currentMesh.name') + 10)];
+        inputText_box_weight.text = boxWeight[currentMesh.name.slice(currentMesh.name.lastIndexOf('currentMesh.name') + 10)];
+      }
+
+      function isBoxInsideTruck(box, truck) {
+        const boxBoundingInfo = box.getBoundingInfo().boundingBox;
+        const truckBoundingInfo = truck.getBoundingInfo().boundingBox;
+
+        const boxMinX = boxBoundingInfo.minimumWorld.x;
+        const boxMaxX = boxBoundingInfo.maximumWorld.x;
+        const boxMinY = boxBoundingInfo.minimumWorld.y;
+        const boxMaxY = boxBoundingInfo.maximumWorld.y;
+        const boxMinZ = boxBoundingInfo.minimumWorld.z;
+        const boxMaxZ = boxBoundingInfo.maximumWorld.z;
+
+        const truckMinX = truckBoundingInfo.minimumWorld.x;
+        const truckMaxX = truckBoundingInfo.maximumWorld.x;
+        const truckMinY = truckBoundingInfo.minimumWorld.y;
+        const truckMaxY = truckBoundingInfo.maximumWorld.y;
+        const truckMinZ = truckBoundingInfo.minimumWorld.z;
+        const truckMaxZ = truckBoundingInfo.maximumWorld.z;
+
+        return (
+            boxMinX >= truckMinX && boxMaxX <= truckMaxX &&
+            boxMinY >= truckMinY && boxMaxY <= truckMaxY &&
+            boxMinZ >= truckMinZ && boxMaxZ <= truckMaxZ
+        );
+      }
+
+      let hoveredBoxIndex = null;
+      
+      scene.onPointerObservable.add((pointerInfo) => {
+        switch (pointerInfo.type) {
+          case BABYLON.PointerEventTypes.POINTERDOWN:
+            if (pointerInfo.pickInfo.hit && pointerInfo.pickInfo.pickedMesh != ground
+              && pointerInfo.pickInfo.pickedMesh != truck
+              && pointerInfo.pickInfo.pickedMesh != floor
+              && pointerInfo.pickInfo.pickedMesh != weel
+              && pointerInfo.pickInfo.pickedMesh != lorry
+              && pointerInfo.pickInfo.pickedMesh != meshDepth
+              && pointerInfo.pickInfo.pickedMesh != meshWidth
+            ) {
+              pointerDown(pointerInfo.pickInfo.pickedMesh)  // pic up mesh
+              showSize();
+              //  console.log(currentMesh.getBoundingInfo().boundingBox.maximum.y);                        
+              scene.onBeforeRenderObservable.add(() => {
+                randomBox.sort((a, b) => (a.position.y - b.position.y)) // kod work mach better
+                randomBox.forEach(function (item, index, array) {
+                  if (!currentMesh.intersectsMesh(item)) {        // put to ground  
+                    currentMesh.position.y = currentMesh.getBoundingInfo().boundingBox.maximum.y;
+                  }
+                });
+                randomBox.forEach(function (item, index, array) {    // lift box        
+                  const currentMinX = currentMesh.getBoundingInfo().boundingBox.minimumWorld.x;
+                  const currentMaxX = currentMesh.getBoundingInfo().boundingBox.maximumWorld.x;
+                  const currentMinZ = currentMesh.getBoundingInfo().boundingBox.minimumWorld.z;
+                  const currentMaxZ = currentMesh.getBoundingInfo().boundingBox.maximumWorld.z;
+
+                  const itemMinX = item.getBoundingInfo().boundingBox.minimumWorld.x;
+                  const itemMaxX = item.getBoundingInfo().boundingBox.maximumWorld.x;
+                  const itemMinZ = item.getBoundingInfo().boundingBox.minimumWorld.z;
+                  const itemMaxZ = item.getBoundingInfo().boundingBox.maximumWorld.z;
+
+                  const isOverlappingX = (currentMaxX > itemMinX && currentMinX < itemMaxX);
+                  const isOverlappingZ = (currentMaxZ > itemMinZ && currentMinZ < itemMaxZ);
+
+                  const isCloseEnoughX = Math.abs(currentMaxX - itemMinX) <= 2 || Math.abs(itemMaxX - currentMinX) <= 2;
+                  const isCloseEnoughZ = Math.abs(currentMaxZ - itemMinZ) <= 2 || Math.abs(itemMaxZ - currentMinZ) <= 2;
+
+                  if (!isCloseEnoughX && !isCloseEnoughZ && currentMesh.intersectsMesh(item) && currentMesh !== item) {
+                    currentMesh.position.y = item.getBoundingInfo().boundingBox.maximumWorld.y + currentMesh.getBoundingInfo().boundingBox.maximum.y;
+                  }
+                });
+              });
+            }
+            break;
+          case BABYLON.PointerEventTypes.POINTERUP:
+            pointerUp();  // let free mesh
+            break;
+          case BABYLON.PointerEventTypes.POINTERMOVE:
+            let pickResult = scene.pick(scene.pointerX, scene.pointerY);
+
+            if (pickResult.hit) {
+              let pickedMesh = pickResult.pickedMesh;
+
+              if (randomBox.includes(pickedMesh)) {
+                hoveredBoxIndex = randomBox.indexOf(pickedMesh)
+
+                let boxInfo = 
+                `Высота: ${2 * pickedMesh.getBoundingInfo().boundingBox.maximum.y}\nДлина: ${2 * pickedMesh.getBoundingInfo().boundingBox.maximum.z}\nШирина: ${2 * pickedMesh.getBoundingInfo().boundingBox.maximum.x}\nВес: ${pickedMesh.weight}`;
+
+                sizeTextBlock.text = boxInfo;
+              } else {
+                sizeTextBlock.text = '';
+                hoveredBoxIndex = null;
+              }
+            }
+
+            pointerMove();  // move mesh
+            break;
+        }
+      });
+
+      /////////////////////  engine  
+
+      // Keyboard events
+
+      scene.onBeforeRenderObservable.add(() => {
+
+        window.addEventListener("keydown", async (ev) => {
+          // Q, q
+          // if (ev.keyCode === 81) {
+          //   currentMesh.spin("y", Math.PI / 2, 1000);
+          //   currentMesh.refreshBoundingInfo();
+          //   keydown = true;
+          // }
+
+          if (ev.shiftKey) {
+            isShiftDown = true;
+          }
+        });
+
+        window.addEventListener("keyup", async (ev) => {
+          if (!ev.shiftKey) {
+            isShiftDown = false;
+          }
+        });
+
+      });
+
+      scene.onKeyboardObservable.add(function (kbInfo) {
+        switch (kbInfo.type) {
+            case BABYLON.KeyboardEventTypes.KEYDOWN:
+                if (kbInfo.event.code === "Backspace" && hoveredBoxIndex !== undefined) {
+                    randomBox[hoveredBoxIndex].dispose();
+                    randomBox.splice(hoveredBoxIndex, 1);
+                    boxWeight.splice(hoveredBoxIndex, 1);
+                    boxDepth.splice(hoveredBoxIndex, 1);
+                    boxHeight.splice(hoveredBoxIndex, 1);
+                    boxWidth.splice(hoveredBoxIndex, 1);
+                    boxName.splice(hoveredBoxIndex, 1);
+                    boxSumm.splice(hoveredBoxIndex, 1);
+                    mCyrcle = mCyrcle - 1;
+                    randomBox[box.boxIndex].rotation = new BABYLON.Vector3(0, Math.PI / 2, 0);
+                    for (let i = hoveredBoxIndex; i < randomBox.length; i++) {
+                        let currentBox = randomBox[i];
+                        
+                        let newId = currentBox.id.replace(/(\d+)$/, (match) => parseInt(match) - 1);
+                        
+                        currentBox.id = newId;
+
+                        randomBox[i].name = newId;
+                    }
+
+                    hoveredBoxIndex = null;
+                }
+        }
+      });
+
+      function rotate(boxIndex) {
+        if (randomBox[boxIndex].isRotated) {
+            randomBox[boxIndex].rotation = new BABYLON.Vector3(0, 0, 0);
+            randomBox[boxIndex].isRotated = false;
+          } else {
+            randomBox[boxIndex].rotation = new BABYLON.Vector3(0, Math.PI / 2, 0);
+            randomBox[boxIndex].isRotated = true;
+          }
+      }
+
+      window.addEventListener("keydown", function(event) {
+        if ((event.key === "r" || event.key === "R" || event.key === "к" || event.key === "К") && hoveredBoxIndex >= 0) {
+          rotate(hoveredBoxIndex);
+        }
+      });
+
+      /*
+              if (BABYLON.VideoRecorder.IsSupported(engine)) {
+              var recorder = new BABYLON.VideoRecorder(engine);
+              recorder.startRecording("test.webm", 15);
+               }
+      */
+
+
+      /////////////////right gui start
+      let advancedTexture = BABYLON.GUI.AdvancedDynamicTexture.CreateFullscreenUI("GUI", true, scene);
+      let loadedGUI = await advancedTexture.parseFromURLAsync("./guiTexture.json");
+
+      let buttonLorry_1 = advancedTexture.getControlByName("ButtonLorry_1");
+      let buttonLorry_2 = advancedTexture.getControlByName("ButtonLorry_2");
+      let buttonLorry_3 = advancedTexture.getControlByName("ButtonLorry_3");
+      let buttonLorry_4 = advancedTexture.getControlByName("ButtonLorry_4");
+      let buttonLorry_5 = advancedTexture.getControlByName("ButtonLorry_5");
+      let buttonLorry_6 = advancedTexture.getControlByName("ButtonLorry_6");
+
+      let inputText_LorryX = advancedTexture.getControlByName("InputText_LorryX");
+      let inputText_LorryY = advancedTexture.getControlByName("InputText_LorryY");
+      let inputText_LorryZ = advancedTexture.getControlByName("InputText_LorryZ");
+
+      let button_tentOn = advancedTexture.getControlByName("Button_tentOn");
+      let button_tentOf = advancedTexture.getControlByName("Button_tentOf");
+      let button_LorrySend = advancedTexture.getControlByName("Button_LorrySend");
+
+      let button_tentTop = advancedTexture.getControlByName("Button_tentTop");
+      let button_tentLeft = advancedTexture.getControlByName("Button_tentLeft");
+      let button_tentRight = advancedTexture.getControlByName("Button_tentRight");
+      let button_LorrySend_Camera = advancedTexture.getControlByName("Button_LorrySend_Camera");
+      let button_VT = advancedTexture.getControlByName("Button_Box_Send_VT");
+
+      sizeTextBlock = advancedTexture.getControlByName("SizeTextBlock");
+      let rectSizeTextBlock = advancedTexture.getControlByName("RectangleTB");
+
+      let stack_truck_panel = advancedTexture.getControlByName("StackPanelTrucks");
+      let stack_truck_delete_panel = advancedTexture.getControlByName("StackPanelTrucksDelete");
+      let button_addTruck = advancedTexture.getControlByName("Button_Add_Truck");
+      let buttonList = advancedTexture.getControlByName("Button_Truck_List");
+      let gridTrackList = advancedTexture.getControlByName("Grid_Track_List");
+      let rightGUIRect = advancedTexture.getControlByName("Rectangle_GUI_Right");
+      let gridTotalR1 = advancedTexture.getControlByName("GridTotal_R1");
+      let gridTotalR2 = advancedTexture.getControlByName("GridTotal_R2");
+      let SV = advancedTexture.getControlByName("ScrollViewer");
+      let Button_S_1 = advancedTexture.getControlByName("Button_S_1");
+      let Button_S_2 = advancedTexture.getControlByName("Button_S_2");
+
+      SV.wheelPrecision = 0.1;
+      SV.barColor = "black";
+      SV.thickness = 0;
+      SV.verticalBar.parent.thickness = 0.5;
+      
+      sizeTextBlock.isPointerBlocker = false;
+      rectSizeTextBlock.isPointerBlocker = false;
+      rightGUIRect.isPointerBlocker = false;
+      gridTotalR1.isPointerBlocker = false;
+      gridTotalR2.isPointerBlocker = false;
+      stack_truck_panel.isPointerBlocker = false;
+      stack_truck_delete_panel.isPointerBlocker = false;
+      gridTrackList.isPointerBlocker = false;
+
+      let button_truck = get_new_truck_button()[0];
+      button_truck.background = "#086CA2FF";
+      currentTruckIndex = 0;
+
+      stack_truck_panel.addControl(button_truck);
+      
+      Button_S_2.onPointerClickObservable.add(() => {
+        Button_S_1.background = "#333333FF";
+        Button_S_2.background = "#086CA2FF";
+        checkST.isChecked = false;
+      });
+
+      Button_S_1.onPointerClickObservable.add(() => {
+        Button_S_1.background = "#086CA2FF";
+        Button_S_2.background = "#333333FF";
+        checkST.isChecked = true;
+      });
+
+      Button_S_1.onPointerOutObservable.add(() => { document.body.style.cursor = '' }); Button_S_1.onPointerEnterObservable.add(() => { document.body.style.cursor = 'pointer' });
+      Button_S_2.onPointerOutObservable.add(() => { document.body.style.cursor = '' }); Button_S_2.onPointerEnterObservable.add(() => { document.body.style.cursor = 'pointer' });
+
+      buttonList.onPointerClickObservable.add(() => {
+        if (gridTrackList.isVisible == true) {
+          gridTrackList.isVisible = false;
+          buttonList.textBlock.text = "Показать список";
+        } else {
+          gridTrackList.isVisible = true;
+          buttonList.textBlock.text = "Скрыть список";
+        }
+      });
+
+      buttonList.onPointerOutObservable.add(() => { document.body.style.cursor = '' }); buttonList.onPointerEnterObservable.add(() => { document.body.style.cursor = 'pointer' });
+      
+      inputText_LorryX.onBeforeKeyAddObservable.add(input => {
+        let insert = String(input.text);
+        
+        if (input._isTextHighlightOn == true) {
+          if (!Number.isInteger((Number(input._currentKey)))) {
+            input.addKey = false
+          } else {
+            input.addKey = true
+          }
+        } else {
+          if (insert.length > 3 || !Number.isInteger((Number(input._currentKey)))) { input.addKey = false } else { input.addKey = true };
+          if (insert.length > 3) { input.text = ""; };
+        }
+      });
+
+      inputText_LorryZ.onBeforeKeyAddObservable.add(input => {
+        let insert = String(input.text);
+        
+        if (input._isTextHighlightOn == true) {
+          if (!Number.isInteger((Number(input._currentKey)))) {
+            input.addKey = false
+          } else {
+            input.addKey = true
+          }
+        } else {
+          if (insert.length > 3 || !Number.isInteger((Number(input._currentKey)))) { input.addKey = false } else { input.addKey = true };
+          if (insert.length > 3) { input.text = ""; };
+        }
+      });
+
+      inputText_LorryY.onBeforeKeyAddObservable.add(input => {
+        let insert = String(input.text);
+        
+        if (input._isTextHighlightOn == true) {
+          if (!Number.isInteger((Number(input._currentKey)))) {
+            input.addKey = false
+          } else {
+            input.addKey = true
+          }
+        } else {
+          if (insert.length > 3 || !Number.isInteger((Number(input._currentKey)))) { input.addKey = false } else { input.addKey = true };
+          if (insert.length > 3) { input.text = ""; };
+        }
+      });
+
+      function shiftUpBoxes(truckIndex) {
+        randomBox.forEach(box => {
+          if (box.truckIndex == truckIndex) {
+            if (box.isShift == false) {
+              box.position.z += (truckIndex + 30) * 1000;
+              box.isShift = true;
+            }
+          }
+        });
+      }
+
+      function shiftDownBoxes(truckIndex) {
+        randomBox.forEach(box => {
+          if (box.truckIndex == truckIndex) {
+            if (box.isShift == true) {
+              box.position.z -= (truckIndex + 30) * 1000;
+              box.isShift = false;
+            }
+          }
+        });
+      }
+
+      // Проверяем, существует ли advancedTexture
+if (!window.advancedTexture) {
+    window.advancedTexture = BABYLON.GUI.AdvancedDynamicTexture.CreateFullscreenUI("UI");
+}
+
+// Количество частей (4 зоны)
+const sectionCount = 4;
+let sectionLength = truckWidth / sectionCount; // Длина одной зоны
+let sections = [];
+
+// Функция вычисления центров зон
+function updateTruckSections() {
+    sectionLength = truckWidth / sectionCount; // Пересчитываем длину секции
+
+    // Пересчитываем координаты центров зон
+    sections = [];
+    for (let i = 0; i < sectionCount; i++) {
+        sections.push(-truckWidth / 2 + sectionLength * (i + 0.5));
+    }
+
+    // Если GUI уже создан, обновляем его
+    if (loadTexts.length > 0) {
+        for (let i = 0; i < sectionCount; i++) {
+            if (loadTexts[i]) {
+                loadTexts[i].left = (sections[i] / truckWidth * 100).toFixed(1) + "%";
+            }
+        }
+    }
+
+    console.log(`Обновлены зоны: truckWidth=${truckWidth}, sectionLength=${sectionLength}`);
+}
+
+
+scene.registerBeforeRender(() => {
+    let loads = calculateLoadDistribution();
+
+    if (!Array.isArray(loads) || loads.length !== sectionCount) {
+        console.error("Ошибка: calculateLoadDistribution() вернуло некорректный массив", loads);
+        return;
+    }
+
+    for (let i = 0; i < sectionCount; i++) {
+        loadTexts[i].text = `Зона ${i + 1}: ${parseInt(loads[i])} кг`;
+    }
+});
+
+// Функция проверки, находится ли коробка в грузовике
+function isBoxInsideTruck(box, truck) {
+    if (!box || !truck) {
+        console.error("Ошибка: box или truck не определены", box, truck);
+        return false;
+    }
+    const boxBoundingInfo = box.getBoundingInfo()?.boundingBox;
+    const truckBoundingInfo = truck.getBoundingInfo()?.boundingBox;
+    
+    if (!boxBoundingInfo || !truckBoundingInfo) {
+        console.error("Ошибка: Нет boundingInfo у объекта", box, truck);
+        return false;
+    }
+
+    const boxMinX = boxBoundingInfo.minimumWorld.x;
+    const boxMaxX = boxBoundingInfo.maximumWorld.x;
+    const boxMinY = boxBoundingInfo.minimumWorld.y;
+    const boxMaxY = boxBoundingInfo.maximumWorld.y;
+    const boxMinZ = boxBoundingInfo.minimumWorld.z;
+    const boxMaxZ = boxBoundingInfo.maximumWorld.z;
+
+    const truckMinX = truckBoundingInfo.minimumWorld.x;
+    const truckMaxX = truckBoundingInfo.maximumWorld.x;
+    const truckMinY = truckBoundingInfo.minimumWorld.y;
+    const truckMaxY = truckBoundingInfo.maximumWorld.y;
+    const truckMinZ = truckBoundingInfo.minimumWorld.z;
+    const truckMaxZ = truckBoundingInfo.maximumWorld.z;
+
+    return (
+        boxMinX >= truckMinX &&
+        boxMaxX <= truckMaxX &&
+        boxMinY >= truckMinY &&
+        boxMaxY <= truckMaxY &&
+        boxMinZ >= truckMinZ &&
+        boxMaxZ <= truckMaxZ
+    );
+}
+
+// Функция расчета нагрузки (в килограммах)
+function calculateLoadDistribution() {
+    let loadDistribution = new Array(sectionCount).fill(0); // Заполняем нулями
+
+    randomBox.forEach(box => {
+        if (!isBoxInsideTruck(box, truck)) return; // Пропускаем, если коробка вне грузовика
+
+        let boxPosition = box.position.x;
+        let weight = parseFloat(box.weight) || 100; // Если нет веса, берем 100 кг (пример)
+
+        for (let i = 0; i < sectionCount; i++) {
+            let sectionStart = -truckWidth / 2 + sectionLength * i;
+            let sectionEnd = sectionStart + sectionLength;
+
+            if (boxPosition >= sectionStart && boxPosition < sectionEnd) {
+                loadDistribution[i] += weight;
+                break; // Коробка найдена в зоне, дальше проверять не нужно
+            }
+        }
+    });
+
+    return loadDistribution.map(w => w || 0); // Гарантируем, что все элементы - числа
+}
+
+// Добавление GUI для вывода нагрузки
+let loadTexts = [];
+function createLoadTextUI() {
+    window.advancedTexture = BABYLON.GUI.AdvancedDynamicTexture.CreateFullscreenUI("UI");
+
+    for (let i = 0; i < sectionCount; i++) {
+        let textBlock = new BABYLON.GUI.TextBlock();
+        textBlock.text = `Зона ${i + 1}: 0 кг`;
+        textBlock.color = "white";
+        textBlock.fontSize = 24;
+        textBlock.top = -100 + i * 30;
+        textBlock.left = (sections[i] / truckWidth * 100).toFixed(1) + "%";
+        textBlock.horizontalAlignment = BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_CENTER;
+        textBlock.verticalAlignment = BABYLON.GUI.Control.VERTICAL_ALIGNMENT_TOP;
+        window.advancedTexture.addControl(textBlock);
+        loadTexts.push(textBlock);
+    }
+}
+createLoadTextUI();
+
+
+// Обновление значений в реальном времени
+scene.registerBeforeRender(() => {
+    let loads = calculateLoadDistribution();
+    
+    // Проверка на корректные данные
+    if (!Array.isArray(loads) || loads.length !== sectionCount) {
+        console.error("Ошибка: calculateLoadDistribution() вернуло некорректный массив", loads);
+        return;
+    }
+
+    for (let i = 0; i < sectionCount; i++) {
+        loadTexts[i].text = `Зона ${i + 1}: ${parseInt(loads[i])} кг`;
+    }
+});
+
+
+      
+      function clearBoxes(truckIndex) {
+        randomBox.forEach(box => {
+          if (box.truckIndex == truckIndex) {
+            notTrucked(0, box)
+            box.truckIndex = null;
+            box.isShift = false;
+          }
+        });
+      }
+
+      function decTruckIndex(truckIndex) {
+        randomBox.forEach(box => {
+          if (box.truckIndex == truckIndex) {
+            box.truckIndex -= 1;
+            if (box.isShift == true) {
+              box.position.z -= (truckIndex + 30) * 1000;
+            }
+            box.position.z += (truckIndex + 29) * 1000;
+            box.isShift = true;
+          }
+        });
+      }
+
+      function switchTruck(t_w, t_h, t_d) {
+        //truckMaterial.alpha = alphaMatTruck;
+
+        let truckLong = 0;
+        
+        truck.scaling.x = t_w / truckWidth;
+        truck.scaling.y = t_h / truckHeight;
+        truck.scaling.z = t_d / truckDepth;
+        truck.position.y = t_h / 2;
+
+        floor.scaling.x = t_w / truckWidth;
+        floor.scaling.z = t_d / truckDepth;
+        floor.position.y = floorHeight / 2;
+
+        truckLong = t_w < 1000 ? 1000 : t_w; //min distance for weel
+
+        boxWeelMove.position = new BABYLON.Vector3(weelPosition - truckLong / 2, -150, 0);
+        boxLorryMove.position = new BABYLON.Vector3(lorryPosition + truckLong / 2, -150, 0);
+
+        trucks[currentTruckIndex].truckWidth = t_w;
+        trucks[currentTruckIndex].truckHeight = t_h;
+        trucks[currentTruckIndex].truckDepth = t_d;
+
+        updateTruckSections();
+      }
+
+      function boxOut() {
+        let maxWidth = 0;
+
+        const sortedRandomBox = randomBox.sort((a, b) => {
+          return b.getBoundingInfo().boundingBox.maximum.z - a.getBoundingInfo().boundingBox.maximum.z;
+        });
+
+        let w = -900;
+        let l = trucks[currentTruckIndex].truckDepth/ 2 + 200 + sortedRandomBox[0].getBoundingInfo().boundingBox.maximum.z;
+
+        sortedRandomBox.forEach((box) => {
+          if (box.truckIndex == null) {
+            box.position.x = w + 5 + box.getBoundingInfo().boundingBox.maximum.x;
+            w += 5 + box.getBoundingInfo().boundingBox.maximum.x * 2;
+            box.position.z = l;
+
+            if (maxWidth < box.getBoundingInfo().boundingBox.maximum.z) {
+              maxWidth = box.getBoundingInfo().boundingBox.maximum.z * 2;
+            }
+
+            box.position.y = box.getBoundingInfo().boundingBox.maximum.y;;
+
+            if (w >= 500) {
+              w = -900;
+              l += 5 + maxWidth;
+              maxWidth = 0;
+            }            
+          }
+        });
+      }
+      
+      button_VT.onPointerClickObservable.add(() => {
+        boxOut();
+      });
+
+      button_VT.onPointerOutObservable.add(() => { document.body.style.cursor = '' }); button_VT.onPointerEnterObservable.add(() => { document.body.style.cursor = 'pointer' });
+
+      function get_new_truck_button() {
+        let truck_index = trucks.length;
+
+        let button_truck = BABYLON.GUI.Button.CreateSimpleButton(`btn_truck_${truck_index}`, `Грузовик ${truck_index + 1}`);
+
+        button_truck.width = "97%";
+        button_truck.height = "50px";
+        button_truck.color = "white";
+        button_truck.fontSize = "30px";
+        button_truck.cornerRadius = 10;
+        button_truck.background = "#333333FF";
+        button_truck.truck_index = truck_index;
+
+        button_truck.onPointerOutObservable.add(() => { document.body.style.cursor = '' }); button_truck.onPointerEnterObservable.add(() => { document.body.style.cursor = 'pointer' });
+
+        trucks.push({
+          truckWidth: inputText_LorryX.text,
+          truckHeight: inputText_LorryY.text,
+          truckDepth: inputText_LorryZ.text,
+          truckButton: button_truck,
+        });
+
+        shiftUpBoxes(currentTruckIndex);
+
+        if (currentTruckIndex != undefined) {
+          stack_truck_panel.children.forEach((button) => {
+            button.background = "#333333FF";
+          });
+
+          button_truck.background = "#086CA2FF";
+        }
+
+        button_truck.onPointerClickObservable.add(() => {
+          stack_truck_panel.children.forEach((button) => {
+            button.background = "#333333FF";
+          });
+
+          button_truck.background = "#086CA2FF";
+
+          shiftUpBoxes(currentTruckIndex);
+
+          currentTruckIndex = button_truck.truck_index;
+          
+          shiftDownBoxes(currentTruckIndex);
+
+          switchTruck(
+            trucks[button_truck.truck_index].truckWidth,
+            trucks[button_truck.truck_index].truckHeight,
+            trucks[button_truck.truck_index].truckDepth
+          );
+        });
+
+        let button_truck_delete = null
+
+        if (truck_index > 0) {
+          button_truck_delete = BABYLON.GUI.Button.CreateSimpleButton(`btn_truck_dlt_${truck_index}`, `x`);
+
+          button_truck_delete.width = "97%";
+          button_truck_delete.height = "50px";
+          button_truck_delete.background = "#333333FF";
+          button_truck_delete.color = "red";
+          button_truck_delete.cornerRadius = 40;
+          button_truck_delete.fontSize = "30px";
+          button_truck_delete.textHorizontalAlignment = BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_CENTER;
+          button_truck_delete.textHorizontalAlignment = BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_CENTER;
+          button_truck_delete.textVerticalAlignment = BABYLON.GUI.Control.VERTICAL_ALIGNMENT_CENTER;
+
+          button_truck_delete.onPointerOutObservable.add(() => { document.body.style.cursor = '' }); button_truck_delete.onPointerEnterObservable.add(() => { document.body.style.cursor = 'pointer' });
+
+          button_truck_delete.onPointerClickObservable.add(() => {
+            shiftUpBoxes(currentTruckIndex);
+            let delete_index = button_truck.truck_index;
+            clearBoxes(delete_index);
+            stack_truck_panel.removeControl(trucks[delete_index].truckButton);
+            stack_truck_delete_panel.removeControl(button_truck_delete);
+            trucks.splice(delete_index, 1);
+            
+            for (let index = delete_index; index < trucks.length; index++) {
+              decTruckIndex(trucks[index].truckButton.truck_index);
+              trucks[index].truckButton.truck_index--;
+              trucks[index].truckButton.textBlock.text = `Грузовик ${trucks[index].truckButton.truck_index + 1}`;
+            }
+            if (delete_index == currentTruckIndex) {
+              currentTruckIndex = 0;
+              shiftDownBoxes(currentTruckIndex);
+            } else if (delete_index < currentTruckIndex) {
+              currentTruckIndex -= 1;
+            }
+
+            shiftDownBoxes(currentTruckIndex);
+
+            stack_truck_panel.children.forEach((button) => {
+              button.background = "#333333FF";
+            });
+
+            stack_truck_panel.children[currentTruckIndex].background = "#086CA2FF";
+
+            switchTruck(
+              trucks[0].truckWidth,
+              trucks[0].truckHeight,
+              trucks[0].truckDepth
+            )
+
+            let buttonHeight = 0;
+            stack_truck_panel.children.forEach((button) => {
+              buttonHeight += button.heightInPixels;
+            });
+
+            gridTotalR2.height = buttonHeight + "px";
+          });
+        }
+
+        return [button_truck, button_truck_delete];
+      }
+
+      button_addTruck.onPointerClickObservable.add(() => {
+        let buttons_truck = get_new_truck_button();
+        let button_truck = buttons_truck[0];
+        let button_truck_delete = buttons_truck[1];
+
+        shiftUpBoxes(currentTruckIndex);
+        currentTruckIndex = button_truck.truck_index;
+        shiftDownBoxes(currentTruckIndex);
+        switchTruck(inputText_LorryX.text, inputText_LorryY.text, inputText_LorryZ.text);
+
+        stack_truck_panel.addControl(button_truck);
+        if (button_truck_delete != null) {
+          stack_truck_delete_panel.addControl(button_truck_delete);
+        }
+
+        let buttonHeight = 0;
+
+        stack_truck_panel.children.forEach((button) => {
+          buttonHeight += button.heightInPixels;
+        });
+
+        gridTotalR2.height = buttonHeight + "px";
+      });
+
+      button_addTruck.onPointerOutObservable.add(() => { document.body.style.cursor = '' }); button_addTruck.onPointerEnterObservable.add(() => { document.body.style.cursor = 'pointer' });
+
+
+      buttonLorry_1.onPointerOutObservable.add(() => { document.body.style.cursor = '' }); buttonLorry_1.onPointerEnterObservable.add(() => { document.body.style.cursor = 'pointer' });
+      buttonLorry_2.onPointerOutObservable.add(() => { document.body.style.cursor = '' }); buttonLorry_2.onPointerEnterObservable.add(() => { document.body.style.cursor = 'pointer' });
+      buttonLorry_3.onPointerOutObservable.add(() => { document.body.style.cursor = '' }); buttonLorry_3.onPointerEnterObservable.add(() => { document.body.style.cursor = 'pointer' });
+      buttonLorry_4.onPointerOutObservable.add(() => { document.body.style.cursor = '' }); buttonLorry_4.onPointerEnterObservable.add(() => { document.body.style.cursor = 'pointer' });
+      buttonLorry_5.onPointerOutObservable.add(() => { document.body.style.cursor = '' }); buttonLorry_5.onPointerEnterObservable.add(() => { document.body.style.cursor = 'pointer' });
+      buttonLorry_6.onPointerOutObservable.add(() => { document.body.style.cursor = '' }); buttonLorry_6.onPointerEnterObservable.add(() => { document.body.style.cursor = 'pointer' });
+
+      button_tentOn.onPointerOutObservable.add(() => { document.body.style.cursor = '' }); button_tentOn.onPointerEnterObservable.add(() => { document.body.style.cursor = 'pointer' });
+      button_tentOf.onPointerOutObservable.add(() => { document.body.style.cursor = '' }); button_tentOf.onPointerEnterObservable.add(() => { document.body.style.cursor = 'pointer' });
+      button_LorrySend.onPointerOutObservable.add(() => { document.body.style.cursor = '' }); button_LorrySend.onPointerEnterObservable.add(() => { document.body.style.cursor = 'pointer' });
+
+      button_tentTop.onPointerOutObservable.add(() => { document.body.style.cursor = '' }); button_tentTop.onPointerEnterObservable.add(() => { document.body.style.cursor = 'pointer' });
+      button_tentLeft.onPointerOutObservable.add(() => { document.body.style.cursor = '' }); button_tentLeft.onPointerEnterObservable.add(() => { document.body.style.cursor = 'pointer' });
+      button_tentRight.onPointerOutObservable.add(() => { document.body.style.cursor = '' }); button_tentRight.onPointerEnterObservable.add(() => { document.body.style.cursor = 'pointer' });
+      button_LorrySend_Camera.onPointerOutObservable.add(() => { document.body.style.cursor = '' }); button_LorrySend_Camera.onPointerEnterObservable.add(() => { document.body.style.cursor = 'pointer' });
+    
+      buttonLorry_1.onPointerClickObservable.add(() => {
+        button_tentOn.background = "#333333FF"; button_tentOf.background = "#086CA2FF";
+
+        switchTruck(1360, 260, 245);
+
+        buttonLorry_1.background = "#086CA2FF"; buttonLorry_2.background = "#333333FF"; buttonLorry_3.background = "#333333FF"; buttonLorry_4.background = "#333333FF"; buttonLorry_5.background = "#333333FF"; buttonLorry_6.background = "#333333FF";
+
+        inputText_LorryX.text = 1360;
+        inputText_LorryY.text = 260;
+        inputText_LorryZ.text = 245;
+      });
+
+      buttonLorry_2.onPointerClickObservable.add(() => {
+        //button_tentOn.background = "#333333FF"; button_tentOf.background = "#086CA2FF";
+        
+        switchTruck(1650, 260, 245);
+
+        buttonLorry_2.background = "#086CA2FF"; buttonLorry_1.background = "#333333FF"; buttonLorry_3.background = "#333333FF"; buttonLorry_4.background = "#333333FF"; buttonLorry_5.background = "#333333FF"; buttonLorry_6.background = "#333333FF";
+
+        inputText_LorryX.text = 1650;
+        inputText_LorryY.text = 260;
+        inputText_LorryZ.text = 245;
+      });
+
+
+      buttonLorry_3.onPointerClickObservable.add(() => {
+        //button_tentOn.background = "#333333FF"; button_tentOf.background = "#086CA2FF";
+
+        switchTruck(1360, 300, 245);
+        
+        buttonLorry_3.background = "#086CA2FF"; buttonLorry_1.background = "#333333FF"; buttonLorry_2.background = "#333333FF"; buttonLorry_4.background = "#333333FF"; buttonLorry_5.background = "#333333FF"; buttonLorry_6.background = "#333333FF";
+
+        inputText_LorryX.text = 1360;
+        inputText_LorryY.text = 300;
+        inputText_LorryZ.text = 245;
+      });
+
+
+      buttonLorry_4.onPointerClickObservable.add(() => {
+        //button_tentOn.background = "#333333FF"; button_tentOf.background = "#086CA2FF";
+
+        switchTruck(1340, 239, 235);
+
+        buttonLorry_4.background = "#086CA2FF"; buttonLorry_1.background = "#333333FF"; buttonLorry_2.background = "#333333FF"; buttonLorry_3.background = "#333333FF"; buttonLorry_5.background = "#333333FF"; buttonLorry_6.background = "#333333FF";
+
+        inputText_LorryX.text = 1340;
+        inputText_LorryY.text = 239;
+        inputText_LorryZ.text = 235;
+      });
+
+
+      buttonLorry_5.onPointerClickObservable.add(() => {
+        //button_tentOn.background = "#333333FF"; button_tentOf.background = "#086CA2FF";
+
+        switchTruck(1203, 239, 235);
+
+        buttonLorry_5.background = "#086CA2FF"; buttonLorry_1.background = "#333333FF"; buttonLorry_2.background = "#333333FF"; buttonLorry_3.background = "#333333FF"; buttonLorry_4.background = "#333333FF"; buttonLorry_6.background = "#333333FF";
+
+        inputText_LorryX.text = 1203;
+        inputText_LorryY.text = 239;
+        inputText_LorryZ.text = 235;
+      });
+
+      buttonLorry_6.onPointerClickObservable.add(() => {
+        //button_tentOn.background = "#333333FF"; button_tentOf.background = "#086CA2FF";
+
+        switchTruck(590, 239, 235);
+
+        buttonLorry_6.background = "#086CA2FF"; buttonLorry_1.background = "#333333FF"; buttonLorry_2.background = "#333333FF"; buttonLorry_3.background = "#333333FF"; buttonLorry_4.background = "#333333FF"; buttonLorry_5.background = "#333333FF";
+
+        inputText_LorryX.text = 590;
+        inputText_LorryY.text = 239;
+        inputText_LorryZ.text = 235;
+      });
+
+      button_tentOn.onPointerClickObservable.add(() => {
+        truckMaterial.alpha = 0.0;
+        button_tentOn.background = "#086CA2FF"; button_tentOf.background = "#333333FF";
+        isTentOpen = true;
+      });
+
+      button_tentOf.onPointerClickObservable.add(() => {
+        truckMaterial.alpha = alphaMatTruck;
+        button_tentOf.background = "#086CA2FF"; button_tentOn.background = "#333333FF";
+        isTentOpen = false;
+      });
+
+      button_LorrySend.onPointerUpObservable.add(function () {
+        switchTruck(
+          inputText_LorryX.text,
+          inputText_LorryY.text,
+          inputText_LorryZ.text
+        );
+
+        buttonLorry_1.background = "#333333FF"; buttonLorry_2.background = "#333333FF"; buttonLorry_3.background = "#333333FF"; buttonLorry_4.background = "#333333FF"; buttonLorry_5.background = "#333333FF"; buttonLorry_6.background = "#333333FF";
+      });
+
+      button_tentTop.onPointerClickObservable.add(() => {
+        truckMaterial.alpha = 0.0;
+        button_tentTop.background = "#086CA2FF"; button_tentLeft.background = "#333333FF"; button_tentRight.background = "#333333FF";
+        camera.setTarget(new BABYLON.Vector3(0, 0, 0));
+        camera.radius = 1400;
+        camera.alpha = Math.PI / 2;
+        camera.beta = 0;
+        button_tentOn.background = "#086CA2FF"; button_tentOf.background = "#333333FF";
+        isTentOpen = true;
+
+        //      scene.meshes.forEach(m => m.position.z = value );
+      });
+
+      button_tentLeft.onPointerClickObservable.add(() => {
+        truckMaterial.alpha = 0.0;
+        button_tentLeft.background = "#086CA2FF"; button_tentTop.background = "#333333FF"; button_tentRight.background = "#333333FF";
+        camera.setTarget(new BABYLON.Vector3(0, 0, 0));
+        camera.radius = 1400;
+        camera.alpha = Math.PI / 2;
+        camera.beta = Math.PI / 2;
+        button_tentOn.background = "#086CA2FF"; button_tentOf.background = "#333333FF";
+        isTentOpen = true;
+      });
+
+      button_tentRight.onPointerClickObservable.add(() => {
+        truckMaterial.alpha = 0.0;
+        button_tentRight.background = "#086CA2FF"; button_tentTop.background = "#333333FF"; button_tentLeft.background = "#333333FF";
+        camera.setTarget(new BABYLON.Vector3(0, 0, 0));
+        camera.radius = 1400;
+        camera.alpha = -Math.PI / 2;
+        camera.beta = Math.PI / 2;
+        button_tentOn.background = "#086CA2FF"; button_tentOf.background = "#333333FF";
+        isTentOpen = true;
+      });
+
+      button_LorrySend_Camera.onPointerClickObservable.add(() => {
+        //truckMaterial.alpha = alphaMatTruck;
+        //button_tentOn.background = "#333333FF"; button_tentOf.background = "#086CA2FF";
+        button_tentRight.background = "#333333FF"; button_tentTop.background = "#333333FF"; button_tentLeft.background = "#333333FF";
+        camera.setTarget(new BABYLON.Vector3(0, 0, 0));
+        camera.radius = 2000;
+        camera.alpha = Math.PI / 2;
+        camera.beta = Math.PI / 3;
+      });
+      /////////////////right gui end
+
+      ///////////////left gui start
+
+      let buttonLorry_templ = advancedTexture.getControlByName("ButtonLorry_templ");
+
+      let inputText_addBoxes = advancedTexture.getControlByName("InputText_addBoxes");
+      let buttonLorry_addBoxes = advancedTexture.getControlByName("ButtonLorry_addBoxes");
+
+      let inputText_box_X = advancedTexture.getControlByName("InputText_box_X");
+      let inputText_box_Y = advancedTexture.getControlByName("InputText_box_Y");
+      let inputText_box_Z = advancedTexture.getControlByName("InputText_box_Z");
+      let inputText_box_place = advancedTexture.getControlByName("InputText_box_place");
+      let inputText_box_weight = advancedTexture.getControlByName("InputText_box_weight");
+
+      let button_Box_Send = advancedTexture.getControlByName("Button_Box_Send");
+      let button_box_delete = advancedTexture.getControlByName("Button_box_delete");
+      let button_box_place = advancedTexture.getControlByName("Button_box_place");
+      let input_count = advancedTexture.getControlByName("InputText_count");
+      let checkST = advancedTexture.getControlByName("Checkbox_ST");
+
+      let textBlock_SS = advancedTexture.getControlByName("Textblock_SSS");
+      textBlock_SS.text = "Правая кнопка мыши - двигаться вдоль сцены.\n  Shift - зажать, чтобы поставить 2 коробки без зазора.\nBackspace - удалить выделенный ящик.\nR - вращать выбранный ящик.";
+
+      buttonLorry_templ.onPointerOutObservable.add(() => { document.body.style.cursor = '' }); buttonLorry_templ.onPointerEnterObservable.add(() => { document.body.style.cursor = 'pointer' });
+      buttonLorry_addBoxes.onPointerOutObservable.add(() => { document.body.style.cursor = '' }); buttonLorry_addBoxes.onPointerEnterObservable.add(() => { document.body.style.cursor = 'pointer' });
+      button_Box_Send.onPointerOutObservable.add(() => { document.body.style.cursor = '' }); button_Box_Send.onPointerEnterObservable.add(() => { document.body.style.cursor = 'pointer' });
+      button_box_delete.onPointerOutObservable.add(() => { document.body.style.cursor = '' }); button_box_delete.onPointerEnterObservable.add(() => { document.body.style.cursor = 'pointer' });
+      button_box_place.onPointerOutObservable.add(() => { document.body.style.cursor = '' }); button_box_place.onPointerEnterObservable.add(() => { document.body.style.cursor = 'pointer' });
+
+      buttonLorry_templ.onPointerClickObservable.add(() => {
+        window.open('template.xlsx', '_blank');
+      });
+
+      let insert = "";
+      inputText_addBoxes.onPointerClickObservable.add(input => {
+        inputText_addBoxes.text = "";
+      });
+
+      inputText_addBoxes.onPointerOutObservable.add(input => {
+        insert = input.text;
+        var regular = /,/g;
+        insert = insert.replace(regular, ".");
+      });
+
+      buttonLorry_addBoxes.onPointerUpObservable.add(function () {
+        let arrayBoxes = insert.split('/');
+        if (inputText_addBoxes.text == "") {  // if empty text
+          arrayBoxes = [0, 0, 0, 0, 0, 0]
+        }
+        inputText_addBoxes.text = "";
+
+        randomBox.forEach(function (item, index, array) {       // delete all boxes 
+          item.dispose();
+        });
+
+        randomBox = [];    // null for all, cleare boxes
+        randomBoxSum = 0;  // null for all, cleare boxes
+        mCyrcle = 0;       // null for all, cleare boxes
+
+        boxSumm = [];
+
+        while (arrayBoxes.length > 0) {
+          for (let i = 0; i < arrayBoxes[5]; ++i) {
+            boxWidth.push(arrayBoxes[0]);
+            boxSumm.push(1);
+            boxDepth.push(arrayBoxes[1]);
+            boxHeight.push(arrayBoxes[2]);
+            boxName.push(arrayBoxes[3]);
+            boxWeight.push(arrayBoxes[4]);
+          }
+          arrayBoxes.splice(0, 6);
+        }
+
+        createBoxes(boxWidth, boxHeight, boxDepth, boxName, boxWeight);
+
+        boxOut();
+      });
+
+
+      inputText_box_X.onBeforeKeyAddObservable.add(input => { // clear if > 999 cm
+        let insert = String(input.text);
+        
+        if (input._isTextHighlightOn == true) {
+          if (!Number.isInteger((Number(input._currentKey)))) {
+            input.addKey = false
+          } else {
+            input.addKey = true
+          }
+        } else {
+          if (insert.length > 2 || !Number.isInteger((Number(input._currentKey)))) { input.addKey = false } else { input.addKey = true };
+          if (insert.length > 2) { input.text = ""; };
+        }
+      });
+
+      inputText_box_Y.onBeforeKeyAddObservable.add(input => { // clear if > 999 cm
+        let insert = String(input.text);
+
+        if (input._isTextHighlightOn == true) {
+          if (!Number.isInteger((Number(input._currentKey)))) {
+            input.addKey = false
+          } else {
+            input.addKey = true
+          }
+        } else {
+          if (insert.length > 2 || !Number.isInteger((Number(input._currentKey)))) { input.addKey = false } else { input.addKey = true };
+          if (insert.length > 2) { input.text = ""; };
+        }
+      });
+
+      inputText_box_Z.onBeforeKeyAddObservable.add(input => { // clear if > 999 cm
+        let insert = String(input.text);
+
+        if (input._isTextHighlightOn == true) {
+          if (!Number.isInteger((Number(input._currentKey)))) {
+            input.addKey = false
+          } else {
+            input.addKey = true
+          }
+        } else {
+          if (insert.length > 2 || !Number.isInteger((Number(input._currentKey)))) { input.addKey = false } else { input.addKey = true };
+          if (insert.length > 2) { input.text = ""; };
+        }
+      });
+
+      inputText_box_place.onBeforeKeyAddObservable.add(input => { // clear if > 10 symbols
+        let insert = String(input.text);
+        if (insert.length > 9) { input.addKey = false } else { input.addKey = true };
+        if (insert.length > 9) { input.text = ""; };
+      });
+
+      inputText_box_weight.onBeforeKeyAddObservable.add(input => { // clear if > 9999 kg
+        let insert = String(input.text);
+
+        if (input._isTextHighlightOn == true) {
+          if (!Number.isInteger((Number(input._currentKey)))) {
+            input.addKey = false
+          } else {
+            input.addKey = true
+          }
+        } else {
+          if (insert.length > 3) { input.addKey = false } else { input.addKey = true };
+          if (insert.length > 3) { input.text = ""; };
+        }
+      });
+
+
+      function deleteAllBoxes() {
+        randomBox.forEach(function (item, index, array) {       // delete all boxes 
+          item.dispose();
+        });
+        randomBox = [];    // null for all, cleare boxes
+        randomBoxSum = 0;  // null for all, cleare boxes
+        mCyrcle = 0;       // null for all, cleare boxes
+        boxWidth = [];    // null for all, cleare boxes parametres
+        boxHeight = [];
+        boxDepth = [];
+        boxSumm = [];
+        boxName = [];
+        boxWeight = [];
+      };
+
+      let firstBoxSend = 0;
+
+      button_Box_Send.onPointerUpObservable.add(function () {
+        if (firstBoxSend == 0) {   // delete all boxes on first click
+          deleteAllBoxes();
+          firstBoxSend = 1;
+        }
+
+        if (inputText_box_X.text !== ""
+          && inputText_box_Y.text !== ""
+          && inputText_box_Z.text !== ""
+          && inputText_box_Y.text !== ""
+          && inputText_box_place.text !== ""
+          && inputText_box_weight.text !== ""
+          && input_count.text !== ""
+        ) {  // if not empty text
+          /*
+                     boxWidth_1 = [];
+                     boxHeight_1 = [];
+                     boxDepth_1 = [];
+                     boxSumm_1 = [];
+                     boxName_1 = [];
+                     boxWeight_1 = []; 
+           */
+          for (let i = 0; i < input_count.text; ++i) {
+            boxWidth[mCyrcle] = inputText_box_X.text;
+            boxHeight[mCyrcle] = inputText_box_Y.text;
+            boxDepth[mCyrcle] = inputText_box_Z.text;
+            boxSumm[mCyrcle] = 1;
+            boxName[mCyrcle] = inputText_box_place.text;
+            boxWeight[mCyrcle] = inputText_box_weight.text;
+
+            randomBox[mCyrcle] = BABYLON.MeshBuilder.CreateBox(`randomBox${mCyrcle}`, {   // add box to scene
+              width: Math.ceil(boxWidth[mCyrcle]), height: Math.ceil(boxHeight[mCyrcle]), depth: Math.ceil(boxDepth[mCyrcle]),
+            }, scene);
+            randomBox[mCyrcle].enableEdgesRendering();
+            randomBox[mCyrcle].edgesWidth = 50.0; // Ширина окантовки
+            randomBox[mCyrcle].edgesColor = new BABYLON.Color4(0, 0, 0, 1); // Черный цвет
+            randomBox[mCyrcle].truckIndex = null;
+            randomBox[mCyrcle].isShift = false;
+            randomBox[mCyrcle].isRotated = false;
+            randomBox[mCyrcle].weight = boxWeight[mCyrcle];
+
+            textureGround[mCyrcle] = new BABYLON.DynamicTexture("dynamic texture", { width: 512, height: 256 }, scene);
+            textureContext[mCyrcle] = textureGround[mCyrcle].getContext();
+            materialGround[mCyrcle] = new BABYLON.StandardMaterial("Mat", scene);
+
+            materialGround[mCyrcle].diffuseColor = new BABYLON.Color3(0.2, 0.2, 0.2);
+            materialGround[mCyrcle].specularColor = new BABYLON.Color3(0.2, 0.2, 0.2);
+
+            let boxColorKey = JSON.stringify([boxWidth[mCyrcle], boxDepth[mCyrcle], boxHeight[mCyrcle]]);
+
+            if (!boxColors.has(boxColorKey)) {
+              boxColors.set(boxColorKey, new BABYLON.Color3(Math.random(), Math.random(), Math.random()));
+            }
+
+            randomBox[mCyrcle].colorT = boxColors.get(boxColorKey);
+
+            materialGround[mCyrcle].emissiveColor = boxColors.get(boxColorKey);
+
+            materialGround[mCyrcle].diffuseTexture = textureGround[mCyrcle];
+            randomBox[mCyrcle].material = materialGround[mCyrcle];
+            randomBox[mCyrcle].material.diffuseTexture.drawText(`${boxName[0]}`, 140, 90, font, "black", "white", true, true);
+            randomBox[mCyrcle].position = new BABYLON.Vector3(200 * mCyrcle / 4 - 500, boxHeight[0] / 2, 200 * (mCyrcle % 4) + 300);
+
+            meshWidth = createTextSizeBoxes(48, boxWidth[mCyrcle] / 5, boxWidth[mCyrcle], 0, boxHeight[mCyrcle] / 2 + 0.4, - boxDepth[mCyrcle] / 2 + boxWidth[mCyrcle] / 10, Math.PI / 2, Math.PI, 0, materialGround[mCyrcle].emissiveColor);
+            meshWidth.isPickable = false;
+            meshWidth.parent = randomBox[mCyrcle];
+
+            meshDepth = createTextSizeBoxes(48, boxDepth[mCyrcle] / 5, boxDepth[mCyrcle], boxWidth[mCyrcle] / 2 - boxDepth[mCyrcle] / 10, boxHeight[mCyrcle] / 2 + 0.4, 0, Math.PI / 2, -Math.PI / 2, 0, materialGround[mCyrcle].emissiveColor);
+            meshDepth.isPickable = false;
+            meshDepth.parent = randomBox[mCyrcle];
+
+            randomBox.sort((a, b) => (a.position.y - b.position.y)) // kod work mach better
+
+            mCyrcle = mCyrcle + 1;
+          }
+          
+          boxOut();
+        };
+        //     console.log(mCyrcle);                   
+      });
+
+      button_box_delete.onPointerClickObservable.add(() => {
+        deleteAllBoxes()
+      });
+
+      function setTrucked(boxIndex, box = null) {
+        let planes;
+
+        if (box != null) {
+          boxIndex = randomBox.indexOf(box);
+        }
+
+        // planes = randomBox[boxIndex].getChildMeshes();
+
+        // let font_size = 30; 
+        // let font = "bold " + font_size + "px Impact";
+        // planes[0].material.diffuseTexture.drawText(2 * randomBox[boxIndex].getBoundingInfo().boundingBox.maximum.x, null, null, font, "#EFB33C", "rgba(0, 0, 0, 0)", true);
+        // planes[1].material.diffuseTexture.drawText(2 * randomBox[boxIndex].getBoundingInfo().boundingBox.maximum.z, null, null, font, "#EFB33C", "rgba(0, 0, 0, 0)", true);
+      }
+      
+      function notTrucked(boxIndex, box = null) {
+        let planes;
+
+        if (box != null) {
+          boxIndex = randomBox.indexOf(box);
+        }
+
+        // planes = randomBox[boxIndex].getChildMeshes();
+
+        // let font_size = 30; 
+        // let font = "bold " + font_size + "px Impact";
+        // planes[0].material.diffuseTexture.drawText(2 * randomBox[boxIndex].getBoundingInfo().boundingBox.maximum.x, null, null, font, "#ffffff", "rgba(0, 0, 0, 0)", true);
+        // planes[1].material.diffuseTexture.drawText(2 * randomBox[boxIndex].getBoundingInfo().boundingBox.maximum.z, null, null, font, "#ffffff", "rgba(0, 0, 0, 0)", true);
+      }
+
+      /////////////////////////// placing start
+
+      button_box_place.onPointerClickObservable.add(() => {
+        if (mCyrcle > 0) {
+          let truckWidth = trucks[currentTruckIndex].truckDepth;
+          let truckHeight = trucks[currentTruckIndex].truckHeight;
+          let truckDepth = trucks[currentTruckIndex].truckWidth;
+          
+          let availableBoxes = []
+
+          randomBox.forEach(function (item, index, array) {
+              if (/^randomBox\d+$/.test(item.name) && (item.truckIndex == null || item.truckIndex == currentTruckIndex)) {
+                if (item.isRotated) {
+                  rotate(index);
+                }
+
+                if (item.truckIndex == currentTruckIndex) {
+                  item.truckIndex = null;
+                }
+
+                availableBoxes.push({
+                  boxIndex: index,
+                  width: 2 * item.getBoundingInfo().boundingBox.maximum.z,
+                  height: 2 * item.getBoundingInfo().boundingBox.maximum.y,
+                  depth: 2 * item.getBoundingInfo().boundingBox.maximum.x,
+                  isRotated: false,
+                  isStacked: false,
+                  stackingBoxIndexes: [],
+                  isPlaced: false
+                });     
+              }
+            });
+
+            availableBoxes.sort(function(a, b) {
+            return b.width - a.width;
+          });
+
+          console.log(availableBoxes);
+
+          if (checkST.isChecked) {
+            for (let i = 0; i < availableBoxes.length; i++) {
+                for (let j = i + 1; j < availableBoxes.length; j++) {
+                  if (
+                    availableBoxes[i].isStacked == false &&
+                    availableBoxes[j].isStacked == false && 
+                    availableBoxes[i].width == availableBoxes[j].width &&
+                    availableBoxes[i].depth == availableBoxes[j].depth
+                  ) {
+                      summaryHeight = availableBoxes[i].height + availableBoxes[j].height;
+                      if (!!availableBoxes[i].stackingBoxIndexes.length) {
+                        for (let l = 0; l < availableBoxes[i].stackingBoxIndexes.length; l++) {
+                          let stackingBoxIndex = availableBoxes[i].stackingBoxIndexes[l];
+
+                          summaryHeight += availableBoxes[stackingBoxIndex].height;
+                        }
+                      }
+
+                      if (summaryHeight <= truckHeight) {
+                        availableBoxes[j].isStacked = true;
+                        availableBoxes[i].stackingBoxIndexes.push(j);
+                      }
+                  } else if (
+                    availableBoxes[i].isStacked == false &&
+                    availableBoxes[j].isStacked == false && 
+                    availableBoxes[i].width == availableBoxes[j].depth &&
+                    availableBoxes[i].depth == availableBoxes[j].width
+                  ) {
+                    summaryHeight = availableBoxes[i].height + availableBoxes[j].height;
+                      if (!!availableBoxes[i].stackingBoxIndexes.length) {
+                        for (let l = 0; l < availableBoxes[i].stackingBoxIndexes.length; l++) {
+                          let stackingBoxIndex = availableBoxes[i].stackingBoxIndexes[l];
+
+                          summaryHeight += availableBoxes[stackingBoxIndex].height;
+                        }
+                      }
+
+                      if (summaryHeight <= truckHeight) {
+                        availableBoxes[j].isStacked = true;
+                        availableBoxes[j].isRotated = true;
+                        availableBoxes[i].stackingBoxIndexes.push(j);
+                      }
+                  }
+                }
+            }
+          }
+
+          let rows = [];
+          
+          let placedBoxes = []
+
+          console.log(truckDepth);
+          console.log(truckWidth);
+
+          availableBoxes.some((box, index) => {
+            if (
+                !placedBoxes.length &&
+                box.width <= truckWidth &&
+                box.depth <= truckDepth &&
+                box.isStacked === false &&
+                box.isPlaced === false
+            ) {
+                box.isPlaced = true;
+                rows.push([0, box.width, box.depth]);
+                placedBoxes.push([index, 0, 0]);
+                return true;
+            } else if (
+                !placedBoxes.length &&
+                box.depth <= truckWidth &&
+                box.width <= truckDepth &&
+                box.isStacked === false &&
+                box.isPlaced === false
+            ) {
+                box.isPlaced = true;
+                rows.push([0, box.depth, box.width]);
+                placedBoxes.push([index, 0, 0]);
+                box.isRotated = true;
+                return true;
+            }
+            return false;
+          });
+
+          availableBoxes.forEach((box, index) => {
+            lastRow = rows[rows.length - 1];
+
+            if (
+                box.width <= truckWidth - lastRow[1] &&
+                box.depth <= truckDepth &&
+                box.isStacked == false &&
+                box.isPlaced == false
+              ) {
+                box.isPlaced = true;
+                rows.push([lastRow[1], lastRow[1] + box.width, box.depth]);
+                placedBoxes.push([index, lastRow[1], 0])
+            } else if
+              (
+                box.depth <= truckWidth - lastRow[1] &&
+                box.width <= truckDepth &&
+                box.isStacked == false &&
+                box.isPlaced == false
+              ) {
+                box.isPlaced = true;
+                box.isRotated = true;
+                rows.push([lastRow[1], lastRow[1] + box.depth, box.width]);
+                placedBoxes.push([index, lastRow[1], 0])
+            }
+
+            //boxOut();
+
+            let indices = Array.from(rows.keys());
+            indices.sort((a, b) => rows[a][2] - rows[b][2]);
+
+            for (let ind = 0; ind < indices.length; ind++) {
+              let i = indices[ind];
+
+              if (
+                box.width <= rows[i][1] - rows[i][0] &&
+                box.depth <= truckDepth - rows[i][2] &&
+                box.isStacked == false &&
+                box.isPlaced == false
+              ) {
+                box.isPlaced = true;
+                placedBoxes.push([index, rows[i][0], rows[i][2]]);
+                rows[i][2] += box.depth;
+              } else if (
+                box.depth <= rows[i][1] - rows[i][0] &&
+                box.width <= truckDepth - rows[i][2] &&
+                box.isStacked == false &&
+                box.isPlaced == false
+              ) {
+                box.isPlaced = true;
+                box.isRotated = true;
+                placedBoxes.push([index, rows[i][0], rows[i][2]])
+                rows[i][2] += box.width;
+              }
+            }
+          });
+
+          console.log(rows);
+          console.log(availableBoxes);
+          console.log(placedBoxes);
+          console.log(randomBox);
+
+          for (let box of availableBoxes) {
+            if (box.isRotated) {
+              let temp = box.width;
+              box.width = box.depth;
+              box.depth = temp;
+
+              rotate(box.boxIndex);
+            }
+          }
+
+          availableBoxes.forEach((box, index) => {
+            if (!box.isPlaced) {
+              notTrucked(box.boxIndex);
+            }
+
+            randomBox[box.boxIndex].position.x += 300 + truckDepth * 2; // чтобы коробки не оставались в грузовике перед их погрузкой и не залазили друг на друга
+          });
+
+          for (let box of placedBoxes) {
+            let placingBox = availableBoxes[box[0]];
+            randomBox[placingBox.boxIndex].position.z = truckWidth / 2 - placingBox.width / 2 - box[1];
+            randomBox[placingBox.boxIndex].position.x = - truckDepth / 2 + placingBox.depth / 2 + box[2];
+            randomBox[placingBox.boxIndex].position.y = 0 + placingBox.height / 2;
+            randomBox[placingBox.boxIndex].isShift = false;
+            randomBox[placingBox.boxIndex].truckIndex = currentTruckIndex;
+            setTrucked(placingBox.boxIndex);
+
+            if (!!placingBox.stackingBoxIndexes.length) {
+              let height = placingBox.height;
+
+              placingBox.stackingBoxIndexes.forEach(boxIndex => {
+                randomBox[availableBoxes[boxIndex].boxIndex].position.z = truckWidth / 2 - placingBox.width / 2 - box[1];
+                randomBox[availableBoxes[boxIndex].boxIndex].position.x = - truckDepth / 2 + placingBox.depth / 2 + box[2];
+                randomBox[availableBoxes[boxIndex].boxIndex].position.y = 0 + availableBoxes[boxIndex].height / 2 + height;
+                height += availableBoxes[boxIndex].height;                 
+                randomBox[availableBoxes[boxIndex].boxIndex].truckIndex = currentTruckIndex;
+                randomBox[availableBoxes[boxIndex].boxIndex].isShift = false;
+                setTrucked(availableBoxes[boxIndex].boxIndex);
+                if (availableBoxes[boxIndex].isRotated) {
+                  rotate(availableBoxes[boxIndex].boxIndex);
+                }
+                if (randomBox[placingBox.boxIndex].isRotated) {
+                  rotate(availableBoxes[boxIndex].boxIndex);
+                }
+              });
+            }
+          }
+
+          boxOut();
+        }
+      });
+
+      /////////////////////////// placing end       
+
+      ////////////////left gui end
+
+
+      // add Inspector start  Shift+Ctrl+Alt+I
+      async function addInspectorForScene(scene) {
+        const switchDebugLayer = () => {
+          if (scene.debugLayer.isVisible()) {
+            scene.debugLayer.hide();
+          } else {
+            scene.debugLayer.show({ overlay: true });
+          }
+        };
+
+        // hide/show the Inspector
+        window.addEventListener("keydown", async (ev) => {
+          // Shift+Ctrl+Alt+I
+          if (ev.shiftKey && ev.ctrlKey && ev.altKey && ev.keyCode === 73) {
+            const debuggerScript = document.querySelector("script[inspector]");
+
+            if (!debuggerScript) {
+              console.log(`Start loading inspector...`);
+              const s = document.createElement("script");
+              s.setAttribute("inspector", "true");
+              s.src =
+                "https://cdn.babylonjs.com/inspector/babylon.inspector.bundle.js";
+
+              s.onload = () => {
+                console.log(`Inspector loaded!`);
+                switchDebugLayer();
+              };
+              s.onerror = () => {
+                console.log(`Inspector failed to load`);
+              };
+              document.body.appendChild(s);
+              return;
+            }
+
+            switchDebugLayer();
+          }
+        });
+      }
+
+      addInspectorForScene(scene);
+
+      // add Inspector  Shift+Ctrl+Alt+I end
+
+      return scene;
+    };
+    window.initFunction = async function () {
+
+      var asyncEngineCreation = async function () {
+        try {
+          return createDefaultEngine();
+        } catch (e) {
+          console.log("the available createEngine function failed. Creating the default engine instead");
+          return createDefaultEngine();
+        }
+      }
+
+      window.engine = await asyncEngineCreation();
+      if (!engine) throw 'engine should not be null.';
+      startRenderLoop(engine, canvas);
+      window.scene = createScene();
+    };
+    initFunction().then(() => {
+      scene.then(returnedScene => {
+        sceneToRender = returnedScene;
+      });
+    });
+
+    // Resize
+    window.addEventListener("resize", function () {
+      engine.resize();
+      advancedTexture.scaleTo(engine.getRenderWidth(), engine.getRenderHeight());
+    });
+  </script>
+  <script> setInterval(checkIsTokenValid, 60 * 1000); </script>
+</body>
+</html>

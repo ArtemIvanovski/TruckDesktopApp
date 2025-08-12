@@ -36,7 +36,7 @@ class TruckScene:
         for v in verts:
             vw.addData3f(*v)
 
-        # Faces (for closed tent fill) - made invisible but functional
+        # Faces (for closed tent fill) - made very thin and subtle
         tri = GeomTriangles(Geom.UHStatic)
         faces = [(0,1,2,3),(4,5,6,7),(0,1,5,4),(1,2,6,5),(2,3,7,6),(3,0,4,7)]
         for a,b,c,d2 in faces:
@@ -48,7 +48,7 @@ class TruckScene:
         node_faces.setPos(0, 0, h/2)
         node_faces.setTransparency(TransparencyAttrib.MAlpha)
         node_faces.setTwoSided(True)
-        node_faces.setColor(0, 0, 0, 0.0)  # Полностью прозрачные
+        node_faces.setRenderModeThickness(0.1)  # Очень тонкие линии
         node_faces.hide()  # start hidden (open tent by default)
 
         # Edges only (no diagonals) — split bottom edges to make them thicker
@@ -76,8 +76,16 @@ class TruckScene:
         node_edges_bottom.setDepthOffset(1)
 
         # Other edges (top rectangle and verticals)
-        
+        lines_other = GeomLines(Geom.UHStatic)
+        others = [
+            (4,5),(5,6),(6,7),(7,4),
+            (0,4),(1,5),(2,6),(3,7)
+        ]
+        for a,b in others:
+            lines_other.addVertices(a,b)
+            lines_other.closePrimitive()
         geom_edges_other = Geom(vdata2)
+        geom_edges_other.addPrimitive(lines_other)
         node_edges_other = self.app.render.attachNewNode(GeomNode("truck_edges_other"))
         node_edges_other.node().addGeom(geom_edges_other)
         node_edges_other.setPos(0, 0, h/2)
@@ -145,9 +153,11 @@ class TruckScene:
         self.truck_edges_other.setRenderModeThickness(1.0)  # Тоньше как на картинке
 
         if self.tent_closed:
+            r, g, b, _ = TRUCK_CLOSED_COLOR
             self.truck_faces.show()
-            # Треугольники остаются невидимыми, но логика работает
-            self.truck_faces.setColor(0, 0, 0, 0.0)  # Полностью прозрачные
+            # Очень тонкие и едва заметные линии вместо сплошных стенок
+            self.truck_faces.setTransparency(TransparencyAttrib.MAlpha)
+            self.truck_faces.setColor(r, g, b, 0.05)  # Очень низкая прозрачность
         else:
             self.truck_faces.hide()
 

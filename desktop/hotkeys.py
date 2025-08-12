@@ -6,7 +6,6 @@ class HotkeyController(QtCore.QObject):
     def __init__(self, window):
         super().__init__(window)
         self.window = window
-        self._is_fullscreen = False
         self._install_shortcuts()
 
     def _install_shortcuts(self):
@@ -16,16 +15,13 @@ class HotkeyController(QtCore.QObject):
         self.sc_escape.activated.connect(self.exit_fullscreen)
 
     def toggle_fullscreen(self):
-        if self._is_fullscreen:
+        if self.window.isFullScreen():
             self.window.showNormal()
-            self._is_fullscreen = False
         else:
             self.window.showFullScreen()
-            self._is_fullscreen = True
 
     def exit_fullscreen(self):
-        if self._is_fullscreen:
+        if self.window.isFullScreen():
             self.window.showNormal()
-            self._is_fullscreen = False
 
 

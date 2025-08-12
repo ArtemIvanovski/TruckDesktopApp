@@ -24,7 +24,7 @@ from direct.showbase.ShowBase import ShowBase
 from typing import Optional, Tuple
 from camera import ArcCamera
 from truck import TruckScene
-from config import BACKGROUND_COLOR, FLOOR_HEIGHT, LIGHTING_MODE, LANG
+from config import BACKGROUND_COLOR, FLOOR_HEIGHT, LIGHTING_MODE, LANG, WHEEL_CABIN_HEIGHT
 from i18n import t
 
 
@@ -259,9 +259,10 @@ class TruckLoadingApp(ShowBase):
             self.box_weel_move = self.render.attachNewNode("boxWeelMove")
             
             # Position parent box exactly as in web version
-            lorry_weel_x = self.truck_width / 2  # truck.getBoundingInfo().boundingBox.maximum.x
+            # В веб-версии: weelPosition - truckLong/2, где truckLong = max(1000, truck_width)
+            truck_long = max(1000, self.truck_width)  # минимальное расстояние для колес
             weel_position = 50
-            self.box_weel_move.setPos(weel_position - lorry_weel_x, 0, 0)
+            self.box_weel_move.setPos(weel_position - truck_long / 2, WHEEL_CABIN_HEIGHT, 0)
             
             # Attach wheel to parent and configure
             self.wheel_model.reparentTo(self.box_weel_move)
@@ -305,9 +306,10 @@ class TruckLoadingApp(ShowBase):
             
             self.box_lorry_move = self.render.attachNewNode("boxLorryMove")
             
-            lorry_weel_x = self.truck_width / 2  # truck.getBoundingInfo().boundingBox.maximum.x
+            # В веб-версии: lorryPosition + truckLong/2, где truckLong = max(1000, truck_width)
+            truck_long = max(1000, self.truck_width)  # минимальное расстояние для колес
             lorry_position = -400
-            self.box_lorry_move.setPos(lorry_position + lorry_weel_x, 0, 0)
+            self.box_lorry_move.setPos(lorry_position + truck_long / 2, WHEEL_CABIN_HEIGHT, 0)
             
             self.lorry_model.reparentTo(self.box_lorry_move)
             # Avoid negative scale to prevent flipped normals/black look
@@ -451,13 +453,15 @@ class TruckLoadingApp(ShowBase):
         self.truck_depth = t_d
         self.scene.resize(t_w, t_h, t_d)
 
-        lorry_weel_x = self.truck_width / 2
+        # Как в веб-версии: truckLong = t_w < 1000 ? 1000 : t_w;
+        truck_long = max(1000, t_w)  # минимальное расстояние для колес как в веб-версии
         weel_position = 50
+        lorry_position = -400
+        
         if hasattr(self, 'box_weel_move'):
-            self.box_weel_move.setPos(weel_position - lorry_weel_x, 0, 0)
+            self.box_weel_move.setPos(weel_position - truck_long / 2, WHEEL_CABIN_HEIGHT, 0)
         if hasattr(self, 'box_lorry_move'):
-            lorry_position = -400
-            self.box_lorry_move.setPos(lorry_position + lorry_weel_x, 0, 0)
+            self.box_lorry_move.setPos(lorry_position + truck_long / 2, WHEEL_CABIN_HEIGHT, 0)
 
         # Preserve tent open/close state across size changes
         if hasattr(self.scene, 'tent_closed'):
@@ -597,16 +601,15 @@ class TruckLoadingApp(ShowBase):
         sys.exit()
 
 
-# Qt5 launcher embedded here for single-entry design
 if __name__ == "__main__":
     from PyQt5 import QtWidgets, QtCore, QtGui
+    from qt_panels import LeftSidebar
     from hotkeys import HotkeyController
 
     class PandaWidget(QtWidgets.QWidget):
         ready = QtCore.pyqtSignal()
         def __init__(self, parent=None):
             super().__init__(parent)
-            # Эксклюзивный нативный виджет без заливки фоном Qt
             self.setAttribute(QtCore.Qt.WA_NativeWindow)
             self.setAttribute(QtCore.Qt.WA_NoSystemBackground)
             self.setAutoFillBackground(False)
@@ -659,9 +662,19 @@ if __name__ == "__main__":
     class MainWindow(QtWidgets.QMainWindow):
         def __init__(self):
             super().__init__()
-            self.setWindowTitle("Загрузка грузовика — Qt UI + Panda3D 3D")
+            self.setWindowTitle("GTSTREAM")
             self.viewer = PandaWidget(self)
-            self.setCentralWidget(self.viewer)
+            # Central splitter: left sidebar + 3D viewer
+            splitter = QtWidgets.QSplitter(QtCore.Qt.Horizontal, self)
+            # Left-side sidebar: thin vertical bar | panel container | 3D viewer
+            sidebar = LeftSidebar(lambda: self.viewer.app3d, self)
+            splitter.addWidget(sidebar)
+            splitter.addWidget(sidebar.panel_container)
+            splitter.addWidget(self.viewer)
+            splitter.setStretchFactor(0, 0)
+            splitter.setStretchFactor(1, 0)
+            splitter.setStretchFactor(2, 1)
+            self.setCentralWidget(splitter)
             self.viewer.ready.connect(self._on_viewer_ready)
             self.hotkeys = HotkeyController(self)
 
@@ -679,6 +692,10 @@ if __name__ == "__main__":
             self.dock_r = None
 
             self.setStatusBar(None)
+
+                # Размеры бокса (веб-предустановки + свой размер)
+                # Устарело: теперь используется левый сайдбар
+                # self._init_size_tab()
 
         def _apply_dims(self):
             try:
@@ -726,6 +743,79 @@ if __name__ == "__main__":
                 self.showNormal()
             else:
                 self.showFullScreen()
+
+        def _init_size_tab(self):
+            dock = QtWidgets.QDockWidget("Параметры", self)
+            dock.setObjectName("dock_sizes")
+            dock.setFeatures(QtWidgets.QDockWidget.DockWidgetMovable | QtWidgets.QDockWidget.DockWidgetFloatable)
+            tabs = QtWidgets.QTabWidget(dock)
+            dock.setWidget(tabs)
+
+            tab_sizes = QtWidgets.QWidget()
+            tabs.addTab(tab_sizes, "Размеры бокса")
+            layout = QtWidgets.QVBoxLayout(tab_sizes)
+
+            group = QtWidgets.QButtonGroup(tab_sizes)
+            group.setExclusive(True)
+            presets = [
+                ("Тент 13.6", 1360, 260, 245),
+                ("Мега", 1360, 300, 245),
+                ("Конт 40ф", 1203, 239, 235),
+                ("Конт 20ф", 590, 239, 235),
+                ("Рефр", 1340, 239, 235),
+                ("Тент 16.5", 1650, 260, 245),
+            ]
+            self._size_radio_to_dims = {}
+            for title, w, h, d in presets:
+                rb = QtWidgets.QRadioButton(title)
+                layout.addWidget(rb)
+                rb.toggled.connect(lambda checked, W=w, H=h, D=d, BTN=rb: checked and self._apply_preset(W, H, D, BTN))
+                self._size_radio_to_dims[rb] = (w, h, d)
+
+            btn_custom = QtWidgets.QPushButton("Свой размер…")
+            btn_custom.clicked.connect(self._open_custom_dialog)
+            layout.addWidget(btn_custom)
+            layout.addStretch(1)
+
+            self.addDockWidget(QtCore.Qt.RightDockWidgetArea, dock)
+            self.dock_r = dock
+
+        def _apply_preset(self, w: int, h: int, d: int, button: QtWidgets.QAbstractButton):
+            # Подсветка выбранного пресета обеспечивает RadioButton
+            try:
+                self.viewer.app3d.switch_truck(int(w), int(h), int(d))
+            except Exception:
+                pass
+
+        def _open_custom_dialog(self):
+            dlg = QtWidgets.QDialog(self)
+            dlg.setWindowTitle("Свой размер")
+            form = QtWidgets.QFormLayout(dlg)
+            ed_w = QtWidgets.QLineEdit(dlg)
+            ed_h = QtWidgets.QLineEdit(dlg)
+            ed_d = QtWidgets.QLineEdit(dlg)
+            for ed in (ed_w, ed_h, ed_d):
+                ed.setMaxLength(4)
+                ed.setValidator(QtGui.QIntValidator(1, 9999, dlg))
+            form.addRow("Длина (см)", ed_w)
+            form.addRow("Высота (см)", ed_h)
+            form.addRow("Ширина (см)", ed_d)
+            btns = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel, parent=dlg)
+            form.addRow(btns)
+
+            def on_accept():
+                try:
+                    w = int(ed_w.text())
+                    h = int(ed_h.text())
+                    d = int(ed_d.text())
+                except Exception:
+                    return
+                self.viewer.app3d.switch_truck(w, h, d)
+                dlg.accept()
+
+            btns.accepted.connect(on_accept)
+            btns.rejected.connect(dlg.reject)
+            dlg.exec_()
 
     def _load_qt_fonts():
         try:

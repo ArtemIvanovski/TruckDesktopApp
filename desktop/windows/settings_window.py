@@ -1,6 +1,6 @@
 from PyQt5 import QtWidgets, QtCore, QtGui
 
-from desktop.graphics_settings import LIGHTING_PRESETS
+from graphics_settings import LIGHTING_PRESETS
 
 
 class CameraControlWidget(QtWidgets.QWidget):

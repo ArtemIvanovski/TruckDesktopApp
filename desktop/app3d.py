@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import logging
+import math
 import os
 import sys
 import traceback
@@ -8,7 +9,7 @@ from typing import Optional, Tuple
 
 from direct.gui.DirectGui import *
 from direct.showbase.ShowBase import ShowBase
-from panda3d.core import Filename, Material
+from panda3d.core import Filename, Material, Point3
 from panda3d.core import (
     WindowProperties,
     AntialiasAttrib,
@@ -350,16 +351,28 @@ class TruckLoadingApp(ShowBase):
     def setup_controls(self):
         print("Setting up controls...")
 
-        self.accept("mouse1", self.arc.on_right_down)
-        self.accept("mouse1-up", self.arc.on_right_up)
-        self.accept("mouse3", self.arc.on_left_down)
-        self.accept("mouse3-up", self.arc.on_left_up)
+        self.accept("mouse1", self.arc.on_left_down)  # Левая для вращения
+        self.accept("mouse1-up", self.arc.on_left_up)
+        self.accept("mouse3", self.arc.on_right_down)  # Правая для панорамирования
+        self.accept("mouse3-up", self.arc.on_right_up)
         self.accept("wheel_up", self.arc.on_wheel_in)
         self.accept("wheel_down", self.arc.on_wheel_out)
         self.accept("shift", self.shift_down)
         self.accept("shift-up", self.shift_up)
 
         print("Controls setup complete")
+
+    def focus_on_truck(self):
+        self.arc.target = Point3(0, 0, 200)  # Центр грузовика
+        self.arc.radius = 1500
+        self.arc.update()
+
+    def reset_camera_view(self):
+        self.arc.target = Point3(0, 0, 0)
+        self.arc.radius = 2000
+        self.arc.alpha = math.pi / 2
+        self.arc.beta = math.pi / 4
+        self.arc.update()
 
     def shift_down(self):
         """Нажатие Shift"""

@@ -12,7 +12,7 @@ class ArcCamera:
         self.target = Point3(0, 0, 0)
         self.radius = 2000
         self.alpha = math.pi / 2
-        self.beta = math.pi / 3
+        self.beta = math.pi / 4
 
         self.rotating = False
         self.panning = False
@@ -30,6 +30,9 @@ class ArcCamera:
         self.update()
 
     def update(self):
+        # Ограничиваем beta чтобы не заходить под землю и не переворачиваться
+        self.beta = max(0.1, min(math.pi - 0.1, self.beta))
+
         x = self.target.x + self.radius * math.sin(self.beta) * math.cos(self.alpha)
         z = self.target.z + self.radius * math.sin(self.beta) * math.sin(self.alpha)
         y = self.target.y + self.radius * math.cos(self.beta)
@@ -37,25 +40,16 @@ class ArcCamera:
         self.base.camera.setPos(x, y, z)
         self.base.camera.lookAt(self.target)
 
-    def on_left_down(self):
-        self.panning = True
-        self.rotating = False
-        if getattr(self.base, 'mouseWatcherNode', None) and self.base.mouseWatcherNode.hasMouse():
-            self.last_x = self.base.mouseWatcherNode.getMouseX()
-            self.last_y = self.base.mouseWatcherNode.getMouseY()
-
-    def on_left_up(self):
-        self.panning = False
+    def zoom_to_target(self, factor):
+        self.radius *= factor
+        self.radius = max(self.settings.min_radius, min(self.settings.max_radius, self.radius))
+        self.update()
 
     def on_wheel_in(self):
-        self.radius *= (1 - self.settings.zoom_sensitivity)
-        self.radius = max(self.settings.min_radius, min(self.settings.max_radius, self.radius))
-        self.update()
+        self.zoom_to_target(1 - self.settings.zoom_sensitivity)
 
     def on_wheel_out(self):
-        self.radius *= (1 + self.settings.zoom_sensitivity)
-        self.radius = max(self.settings.min_radius, min(self.settings.max_radius, self.radius))
-        self.update()
+        self.zoom_to_target(1 + self.settings.zoom_sensitivity)
 
     def start_rotate(self):
         self.rotating = True
@@ -85,8 +79,8 @@ class ArcCamera:
             return task.cont
 
         if self.rotating or self.panning:
-            dx = (mx - self.last_x) * 100.0
-            dy = (my - self.last_y) * 100.0
+            dx = (mx - self.last_x) * 2.0  # Увеличил чувствительность
+            dy = (my - self.last_y) * 2.0
 
             if self.rotating:
                 rot_dx = dx * self.settings.rotation_sensitivity
@@ -97,27 +91,31 @@ class ArcCamera:
                 if self.settings.invert_rotation_y:
                     rot_dy = -rot_dy
 
-                self.vel_alpha += -rot_dx * 0.01
-                self.vel_beta += rot_dy * 0.01
+                self.vel_alpha += -rot_dx * 0.02
+                self.vel_beta += rot_dy * 0.02
 
             elif self.panning:
-                pan_dx = dx * self.settings.pan_sensitivity
-                pan_dy = dy * self.settings.pan_sensitivity
+                pan_dx = dx * self.settings.pan_sensitivity * (self.radius / 1000.0)  # Масштабируем по расстоянию
+                pan_dy = dy * self.settings.pan_sensitivity * (self.radius / 1000.0)
 
                 if self.settings.invert_pan_x:
                     pan_dx = -pan_dx
                 if self.settings.invert_pan_y:
                     pan_dy = -pan_dy
 
+                # Панорамирование в плоскости экрана
                 right = Vec3(math.cos(self.alpha + math.pi / 2), 0, math.sin(self.alpha + math.pi / 2))
-                forward = Vec3(math.cos(self.alpha), 0, math.sin(self.alpha))
-                pan_delta = right * pan_dx + forward * pan_dy
+                up_vector = Vec3(0, 0, 1)  # Z вверх
+
+                pan_delta = right * pan_dx + up_vector * pan_dy
                 self.vel_pan += pan_delta
 
         if self.settings.enable_inertia:
             self.alpha += self.vel_alpha
             self.beta += self.vel_beta
-            self.beta = max(0.01, min(self.settings.max_beta, self.beta))
+
+            # Ограничиваем beta здесь тоже
+            self.beta = max(0.1, min(math.pi - 0.1, self.beta))
 
             self.target += self.vel_pan
 
@@ -137,17 +135,6 @@ class ArcCamera:
         self.last_x, self.last_y = mx, my
         return task.cont
 
-    def on_right_down(self):
-        self.rotating = True
-        self.panning = False
-        if getattr(self.base, 'mouseWatcherNode', None) and self.base.mouseWatcherNode.hasMouse():
-            self.last_x = self.base.mouseWatcherNode.getMouseX()
-            self.last_y = self.base.mouseWatcherNode.getMouseY()
-            self.has_mouse_pos = True
-
-    def on_right_up(self):
-        self.rotating = False
-
     def get_camera_settings(self):
         return self.settings
 
@@ -158,3 +145,23 @@ class ArcCamera:
 
     def reset_camera_settings(self):
         self.settings = CameraSettings()
+
+    def on_left_down(self):
+        self.rotating = True
+        self.panning = False
+        if getattr(self.base, 'mouseWatcherNode', None) and self.base.mouseWatcherNode.hasMouse():
+            self.last_x = self.base.mouseWatcherNode.getMouseX()
+            self.last_y = self.base.mouseWatcherNode.getMouseY()
+
+    def on_left_up(self):
+        self.rotating = False
+
+    def on_right_down(self):
+        self.panning = True
+        self.rotating = False
+        if getattr(self.base, 'mouseWatcherNode', None) and self.base.mouseWatcherNode.hasMouse():
+            self.last_x = self.base.mouseWatcherNode.getMouseX()
+            self.last_y = self.base.mouseWatcherNode.getMouseY()
+
+    def on_right_up(self):
+        self.panning = False

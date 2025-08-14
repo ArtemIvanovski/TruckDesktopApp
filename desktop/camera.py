@@ -14,6 +14,10 @@ class ArcCamera:
         self.max_beta = (math.pi / 2) * 0.99
         self.rotating = False
         self.panning = False
+        self.dragging = False  # Флаг активного перемещения
+        self.zoom_speed = 0.02
+        self.pan_sensitivity = 5
+        self.rotation_sensitivity = 5
         self.last_x = 0
         self.last_y = 0
         self._vel_alpha = 0.0
@@ -48,14 +52,30 @@ class ArcCamera:
         self.panning = False
 
     def on_wheel_in(self):
-        self.radius *= 0.98  
+        self.radius *= (1 - self.zoom_speed)
         self.radius = max(self.min_radius, min(self.max_radius, self.radius))
         self.update()
 
     def on_wheel_out(self):
-        self.radius *= 1.02  
+        self.radius *= (1 + self.zoom_speed)
         self.radius = max(self.min_radius, min(self.max_radius, self.radius))
         self.update()
+
+    def start_rotate(self):
+        self.rotating = True
+        self.dragging = True
+
+    def stop_rotate(self):
+        self.rotating = False
+        self.dragging = False
+
+    def start_pan(self):
+        self.panning = True
+        self.dragging = True
+
+    def stop_pan(self):
+        self.panning = False
+        self.dragging = False
 
     def tick(self, task):
         if getattr(self.base, 'mouseWatcherNode', None) and self.base.mouseWatcherNode.hasMouse():
@@ -74,7 +94,7 @@ class ArcCamera:
             elif self.panning:
                 right = Vec3(math.cos(self.alpha + math.pi / 2), 0, math.sin(self.alpha + math.pi / 2))
                 forward = Vec3(math.cos(self.alpha), 0, math.sin(self.alpha))
-                pan_delta = right * dx * 10.0 + forward * dy * 10.0
+                pan_delta = right * dx * 5.0 + forward * dy * 5.0
                 self._vel_pan = self._vel_pan * self._damping + pan_delta
                 self.target += self._vel_pan
                 self.update()

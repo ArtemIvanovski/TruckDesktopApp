@@ -87,6 +87,11 @@
 
       var scene = new BABYLON.Scene(engine);
       scene.clearColor = new BABYLON.Color3(0.35, 0.35, 0.35);
+      
+      // Отключаем тени в сцене
+      scene.shadowsEnabled = false;
+      scene.useRightHandedSystem = false;
+      
       var camera = new BABYLON.ArcRotateCamera("Camera", Math.PI / 2, Math.PI / 3, 2000, new BABYLON.Vector3(0, 300, 0), scene);
       //  camera.setPosition(new BABYLON.Vector3(Math.PI / 2, Math.PI / 4, 2000));
 
@@ -104,9 +109,15 @@
 
       camera.upperBetaLimit = (Math.PI / 2) * 0.99;
 
-      // Light
-      const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(-1, 1, -1));
-      light.intensity = 1.5;
+      // Light - отключаем направленное освещение для устранения теней
+      // const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(-1, 1, -1));
+      // light.intensity = 1.5;
+      
+      // Создаем только ambient свет для равномерного освещения без теней
+      const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0));
+      light.intensity = 1.0;
+      light.diffuse = new BABYLON.Color3(0, 0, 0); // Отключаем диффузное освещение
+      light.specular = new BABYLON.Color3(0, 0, 0); // Отключаем блики
 
 
       //Materials
@@ -126,6 +137,7 @@
       truckMaterial.diffuseColor = new BABYLON.Color3(0.4, 0.4, 0.4, 0.1);
       truckMaterial.emissiveColor = new BABYLON.Color3(1, 1, 1);
       truckMaterial.alpha = alphaMatTruck;
+      truckMaterial.disableLighting = true; // Отключаем освещение для материала
 
       //floor
       let alphaMatFloor = 0.4;
@@ -133,6 +145,7 @@
       floorMaterial.diffuseColor = new BABYLON.Color3(0.4, 0.4, 0.4, 0.1);
       floorMaterial.emissiveColor = new BABYLON.Color3(1, 1, 1);
       floorMaterial.alpha = alphaMatFloor;
+      floorMaterial.disableLighting = true; // Отключаем освещение для материала
 
 
       let truckWidth = 1650;
@@ -176,6 +189,10 @@
 
         resultWeel.meshes[0].getDescendants().forEach((mesh) => {
           mesh.isPickable = false;
+          // Отключаем освещение для всех мешей модели
+          if (mesh.material) {
+            mesh.material.disableLighting = true;
+          }
         })
       });
 
@@ -192,6 +209,10 @@
 
         model.meshes[0].getDescendants().forEach((mesh) => {
           mesh.isPickable = false;
+          // Отключаем освещение для всех мешей модели
+          if (mesh.material) {
+            mesh.material.disableLighting = true;
+          }
         })
       });
 
@@ -199,6 +220,10 @@
       // Ground
       var ground = BABYLON.MeshBuilder.CreateGround("ground", { width: 4800, height: 4800 }, scene, false);
       ground.material = groundMaterial;
+      // Отключаем освещение для ground
+      if (ground.material) {
+        ground.material.disableLighting = true;
+      }
 
       var trucks = [];
       var currentTruckIndex = 0;
@@ -248,6 +273,7 @@
         mat.diffuseTexture = dynamicTexture;
         mat.specularColor = new BABYLON.Color3(0.1, 0.1, 0.1); // Убираем отражения
         mat.emissiveColor = new BABYLON.Color3(0.3, 0.3, 0.3); // Убираем свечение
+        mat.disableLighting = true; // Отключаем освещение для материала
         mat.diffuseTexture.hasAlpha = true;
         dynamicTexture.drawText(text, null, null, font, "#000000", "rgba(0, 0, 0, 0)", true);
         console.log(color3ToHex(colorT));
@@ -289,6 +315,7 @@
           materialGround[mCyrcle] = new BABYLON.StandardMaterial("Mat", scene);
           materialGround[mCyrcle].diffuseColor = new BABYLON.Color3(0.2, 0.2, 0.2);
           materialGround[mCyrcle].specularColor = new BABYLON.Color3(0.2, 0.2, 0.2);
+          materialGround[mCyrcle].disableLighting = true; // Отключаем освещение для материала
 
           let boxColorKey = JSON.stringify([boxWidth[mCyrcle], boxDepth[mCyrcle], boxHeight[mCyrcle]]);
 
@@ -1585,6 +1612,7 @@ scene.registerBeforeRender(() => {
 
             materialGround[mCyrcle].diffuseColor = new BABYLON.Color3(0.2, 0.2, 0.2);
             materialGround[mCyrcle].specularColor = new BABYLON.Color3(0.2, 0.2, 0.2);
+            materialGround[mCyrcle].disableLighting = true; // Отключаем освещение для материала
 
             let boxColorKey = JSON.stringify([boxWidth[mCyrcle], boxDepth[mCyrcle], boxHeight[mCyrcle]]);
 

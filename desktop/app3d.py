@@ -150,15 +150,32 @@ class TruckLoadingApp(ShowBase):
             props.setSize(int(width), int(height))
             self.win.requestProperties(props)
 
+    def remove_material_specular(self, model):
+        """Сделать настройки с бликами и без mat.setSpecular(Vec4(0, 0, 0, 1)) меняем на все 1111"""
+        if not model or model.isEmpty():
+            return
+
+        from panda3d.core import Vec4
+
+        materials = model.findAllMaterials()
+        for material in materials:
+            material.setSpecular(Vec4(0, 0, 0, 1))
+            material.setShininess(32)
+            material.setAmbient(Vec4(1, 1, 1, 1))
+
+        for node in model.findAllMatches("**"):
+            if node.hasMaterial():
+                mat = node.getMaterial()
+                mat.setSpecular(Vec4(0, 0, 0, 1))
+                mat.setShininess(32)
+                mat.setAmbient(Vec4(1, 1, 1, 1))
+
     def load_models(self):
         logger.info("Starting models loading...")
 
         model_formats = [
             ("models/weel.obj", "models/lorry.obj"),
-            ("models/weel.egg", "models/lorry.egg"),
-            ("models/weel.bam", "models/lorry.bam"),
             ("weel.obj", "lorry.obj"),
-            ("models/weel.glb", "models/lorry.glb")
         ]
 
         wheel_path = None
@@ -223,7 +240,7 @@ class TruckLoadingApp(ShowBase):
                 wheel_mat.setDiffuse((0.2, 0.2, 0.2, 1))
                 wheel_mat.setEmission((0.36, 0.36, 0.36, 1))
                 self.wheel_model.setMaterial(wheel_mat, 1)
-
+            self.remove_material_specular(self.wheel_model)
             logger.info("Wheel configured successfully")
 
         self.lorry_model = None
@@ -272,7 +289,7 @@ class TruckLoadingApp(ShowBase):
                 cabin_mat.setDiffuse((0.3, 0.35, 0.4, 1))
                 cabin_mat.setEmission((0.54, 0.63, 0.72, 1))
                 self.lorry_model.setMaterial(cabin_mat, 1)
-
+            self.remove_material_specular(self.lorry_model)
             logger.info("Cabin configured successfully")
 
         logger.info("Models loading completed")
@@ -399,21 +416,19 @@ class TruckLoadingApp(ShowBase):
             self.zone_indicators.append(zone_text)
 
     def setup_controls(self):
-        # Левая кнопка мыши - вращение
-        self.accept("mouse1", self.arc.on_left_down)
-        self.accept("mouse1-up", self.arc.on_left_up)
+        print("Setting up controls...")
 
-        # Правая кнопка мыши - панорамирование
-        self.accept("mouse2", self.arc.on_right_down)
-        self.accept("mouse2-up", self.arc.on_right_up)
-
-        # Колесо мыши - масштабирование
+        # Убрать тестовые обработчики, оставить только реальные
+        self.accept("mouse1", self.arc.on_right_down)  # Левая = вращение
+        self.accept("mouse1-up", self.arc.on_right_up)
+        self.accept("mouse3", self.arc.on_left_down)  # Правая = панорамирование
+        self.accept("mouse3-up", self.arc.on_left_up)
         self.accept("wheel_up", self.arc.on_wheel_in)
         self.accept("wheel_down", self.arc.on_wheel_out)
-
-        # SHIFT для привязки объектов
         self.accept("shift", self.shift_down)
         self.accept("shift-up", self.shift_up)
+
+        print("Controls setup complete")
 
     def start_camera_rotate(self):
         self.arc.start_rotate()

@@ -1,105 +1,177 @@
 import math
 from panda3d.core import Point3, Vec3
 
+from camera_settings import CameraSettings
+
 
 class ArcCamera:
     def __init__(self, base):
         self.base = base
-        # Точные параметры из content.html
-        self.target = Point3(0, 300, 0)  # new BABYLON.Vector3(0, 300, 0)
-        self.radius = 2000  # начальный радиус
-        self.alpha = math.pi / 2  # Math.PI / 2
-        self.beta = math.pi / 3  # Math.PI / 3
+        self.settings = CameraSettings()
 
-        # Ограничения как в JS
-        self.min_radius = 150  # camera.lowerRadiusLimit = 150
-        self.max_radius = 3500  # camera.upperRadiusLimit = 3500
-        self.max_beta = (math.pi / 2) * 0.99  # camera.upperBetaLimit = (Math.PI / 2) * 0.99
+        # Позиция камеры
+        self.target = Point3(0, 300, 0)
+        self.radius = 2000
+        self.alpha = math.pi / 2
+        self.beta = math.pi / 3
 
-        # Чувствительность как в JS
-        self.wheel_delta_percentage = 0.02  # camera.wheelDeltaPercentage = 0.02
-        self.panning_sensibility = 5  # camera.panningSensibility = 5
-
-        self.dragging = False
+        # Состояния
+        self.rotating = False
         self.panning = False
         self.last_x = 0
         self.last_y = 0
+        self.mouse_x = 0
+        self.mouse_y = 0
+        self.has_mouse_pos = False
+
+        # Инерция
+        self.vel_alpha = 0.0
+        self.vel_beta = 0.0
+        self.vel_pan = Vec3(0, 0, 0)
+
         self.update()
 
     def update(self):
-        # Точная формула позиционирования как в Babylon.js ArcRotateCamera
+        # Точная формула ArcRotateCamera из Babylon.js
         x = self.target.x + self.radius * math.sin(self.beta) * math.cos(self.alpha)
         y = self.target.y + self.radius * math.cos(self.beta)
         z = self.target.z + self.radius * math.sin(self.beta) * math.sin(self.alpha)
         self.base.camera.setPos(x, y, z)
         self.base.camera.lookAt(self.target)
 
-    def on_wheel_in(self):
-        self.radius *= (1 - self.wheel_delta_percentage)
-        self.radius = max(self.min_radius, min(self.max_radius, self.radius))
-        self.update()
-
-    def on_wheel_out(self):
-        self.radius *= (1 + self.wheel_delta_percentage)
-        self.radius = max(self.min_radius, min(self.max_radius, self.radius))
-        self.update()
-
-    def tick(self, task):
-        if getattr(self.base, 'mouseWatcherNode', None) and self.base.mouseWatcherNode.hasMouse():
-            mx = self.base.mouseWatcherNode.getMouseX()
-            my = self.base.mouseWatcherNode.getMouseY()
-
-            if self.dragging or self.panning:
-                dx = (mx - self.last_x) * self.panning_sensibility
-                dy = (my - self.last_y) * self.panning_sensibility
-
-                if self.dragging:
-                    self.alpha -= dx
-                    self.beta += dy
-                    self.beta = max(0.1, min(self.max_beta, self.beta))
-                elif self.panning:
-                    right = Vec3(math.cos(self.alpha + math.pi / 2), 0, math.sin(self.alpha + math.pi / 2))
-                    forward = Vec3(math.cos(self.alpha), 0, math.sin(self.alpha))
-                    pan_delta = right * dx + forward * dy
-                    self.target += pan_delta
-
-                self.update()
-
-            self.last_x, self.last_y = mx, my
-        return task.cont
-
+    # ЛЕВАЯ кнопка мыши - ПАНОРАМИРОВАНИЕ
     def on_left_down(self):
-        """Начало вращения камеры"""
-        self.dragging = True
-        self.panning = False
+        """Левая кнопка - начало панорамирования"""
+        self.panning = True
+        self.rotating = False
         if getattr(self.base, 'mouseWatcherNode', None) and self.base.mouseWatcherNode.hasMouse():
             self.last_x = self.base.mouseWatcherNode.getMouseX()
             self.last_y = self.base.mouseWatcherNode.getMouseY()
 
     def on_left_up(self):
-        """Конец вращения камеры"""
-        self.dragging = False
-
-    def on_right_down(self):
-        """Начало панорамирования"""
-        self.panning = True
-        self.dragging = False
-        if getattr(self.base, 'mouseWatcherNode', None) and self.base.mouseWatcherNode.hasMouse():
-            self.last_x = self.base.mouseWatcherNode.getMouseX()
-            self.last_y = self.base.mouseWatcherNode.getMouseY()
-
-    def on_right_up(self):
-        """Конец панорамирования"""
+        """Левая кнопка - конец панорамирования"""
         self.panning = False
 
+    # КОЛЕСО мыши - ЗУМ
+    def on_wheel_in(self):
+        self.radius *= (1 - self.settings.zoom_sensitivity)
+        self.radius = max(self.settings.min_radius, min(self.settings.max_radius, self.radius))
+        self.update()
+
+    def on_wheel_out(self):
+        self.radius *= (1 + self.settings.zoom_sensitivity)
+        self.radius = max(self.settings.min_radius, min(self.settings.max_radius, self.radius))
+        self.update()
+
+    # Методы совместимости
     def start_rotate(self):
-        self.dragging = True
+        self.rotating = True
 
     def stop_rotate(self):
-        self.dragging = False
+        self.rotating = False
 
     def start_pan(self):
         self.panning = True
 
     def stop_pan(self):
         self.panning = False
+
+    def tick(self, task):
+        mouse_available = getattr(self.base, 'mouseWatcherNode', None) and self.base.mouseWatcherNode.hasMouse()
+
+        if mouse_available:
+            mx = self.base.mouseWatcherNode.getMouseX()
+            my = self.base.mouseWatcherNode.getMouseY()
+            self.mouse_x = mx
+            self.mouse_y = my
+            self.has_mouse_pos = True
+        elif self.has_mouse_pos:
+            mx = self.mouse_x
+            my = self.mouse_y
+        else:
+            return task.cont
+
+        # Вычисляем дельту движения
+        if self.rotating or self.panning:
+            dx = (mx - self.last_x) * 100.0
+            dy = (my - self.last_y) * 100.0
+
+            if self.rotating:
+                # Применяем чувствительность и инверсии
+                rot_dx = dx * self.settings.rotation_sensitivity
+                rot_dy = dy * self.settings.rotation_sensitivity
+
+                if self.settings.invert_rotation_x:
+                    rot_dx = -rot_dx
+                if self.settings.invert_rotation_y:
+                    rot_dy = -rot_dy
+
+                # Добавляем к скорости (инерция)
+                self.vel_alpha += -rot_dx * 0.01
+                self.vel_beta += rot_dy * 0.01
+
+            elif self.panning:
+                # Применяем чувствительность и инверсии для панорамирования
+                pan_dx = dx * self.settings.pan_sensitivity
+                pan_dy = dy * self.settings.pan_sensitivity
+
+                if self.settings.invert_pan_x:
+                    pan_dx = -pan_dx
+                if self.settings.invert_pan_y:
+                    pan_dy = -pan_dy
+
+                # Вычисляем направления для панорамирования
+                right = Vec3(math.cos(self.alpha + math.pi / 2), 0, math.sin(self.alpha + math.pi / 2))
+                forward = Vec3(math.cos(self.alpha), 0, math.sin(self.alpha))
+                pan_delta = right * pan_dx + forward * pan_dy
+                self.vel_pan += pan_delta
+
+        # Применяем инерцию
+        if self.settings.enable_inertia:
+            # Применяем скорости к углам
+            self.alpha += self.vel_alpha
+            self.beta += self.vel_beta
+            self.beta = max(0.1, min(self.settings.max_beta, self.beta))
+
+            # Применяем скорость к цели панорамирования
+            self.target += self.vel_pan
+
+            # Демпинг (затухание)
+            self.vel_alpha *= self.settings.damping
+            self.vel_beta *= self.settings.damping
+            self.vel_pan *= self.settings.damping
+
+            # Остановка при малых скоростях
+            if abs(self.vel_alpha) < self.settings.min_velocity:
+                self.vel_alpha = 0
+            if abs(self.vel_beta) < self.settings.min_velocity:
+                self.vel_beta = 0
+            if self.vel_pan.length() < self.settings.min_velocity:
+                self.vel_pan = Vec3(0, 0, 0)
+
+            self.update()
+
+        self.last_x, self.last_y = mx, my
+        return task.cont
+
+    def on_right_down(self):
+        self.rotating = True
+        self.panning = False
+        if getattr(self.base, 'mouseWatcherNode', None) and self.base.mouseWatcherNode.hasMouse():
+            self.last_x = self.base.mouseWatcherNode.getMouseX()
+            self.last_y = self.base.mouseWatcherNode.getMouseY()
+            self.has_mouse_pos = True
+
+    def on_right_up(self):
+        self.rotating = False
+
+    def get_camera_settings(self):
+        return self.arc.settings
+
+    def update_camera_settings(self, **kwargs):
+        for key, value in kwargs.items():
+            if hasattr(self.arc.settings, key):
+                setattr(self.arc.settings, key, value)
+
+    def reset_camera_settings(self):
+        self.arc.settings = CameraSettings()

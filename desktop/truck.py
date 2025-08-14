@@ -1,5 +1,4 @@
-from panda3d.core import CardMaker, TransparencyAttrib, GeomVertexData, GeomVertexFormat, Geom, GeomVertexWriter, \
-    GeomTriangles, GeomNode
+from panda3d.core import CardMaker, TransparencyAttrib, GeomVertexData, GeomVertexFormat, Geom, GeomVertexWriter, GeomTriangles, GeomNode
 
 from config import FLOOR_COLOR
 
@@ -37,10 +36,8 @@ class TruckScene:
         # Фиксированная высота подъема нижних вершин: всегда 130 см
         fixed_lift = 130
         verts = [
-            (-w / 2, -d / 2, lift + fixed_lift), (w / 2, -d / 2, lift + fixed_lift), (w / 2, d / 2, lift + fixed_lift),
-            (-w / 2, d / 2, lift + fixed_lift),
-            (-w / 2, -d / 2, h + lift + fixed_lift), (w / 2, -d / 2, h + lift + fixed_lift),
-            (w / 2, d / 2, h + lift + fixed_lift), (-w / 2, d / 2, h + lift + fixed_lift)
+            (-w/2, -d/2, lift + fixed_lift), (w/2, -d/2, lift + fixed_lift), (w/2, d/2, lift + fixed_lift), (-w/2, d/2, lift + fixed_lift),
+            (-w/2, -d/2, h+lift + fixed_lift), (w/2, -d/2, h+lift + fixed_lift), (w/2, d/2, h+lift + fixed_lift), (-w/2, d/2, h+lift + fixed_lift)
         ]
         for v in verts:
             vw.addData3f(*v)
@@ -48,10 +45,9 @@ class TruckScene:
         # Faces (for closed tent fill) - solid areas without lines
         tri = GeomTriangles(Geom.UHStatic)
         # Exclude bottom face (0,1,2,3) so the bottom is controlled separately by floor
-        faces = [(4, 5, 6, 7), (0, 1, 5, 4), (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7)]
-        for a, b, c, d2 in faces:
-            tri.addVertices(a, b, c);
-            tri.addVertices(a, c, d2)
+        faces = [(4,5,6,7),(0,1,5,4),(1,2,6,5),(2,3,7,6),(3,0,4,7)]
+        for a,b,c,d2 in faces:
+            tri.addVertices(a,b,c); tri.addVertices(a,c,d2)
         geom_faces = Geom(vdata)
         geom_faces.addPrimitive(tri)
         node_faces = self.app.render.attachNewNode(GeomNode("truck_faces"))
@@ -60,11 +56,12 @@ class TruckScene:
         node_faces.setTransparency(TransparencyAttrib.MAlpha)
         node_faces.setTwoSided(True)
         node_faces.clearRenderMode()
+        node_faces.setLightOff(1)
         node_faces.setDepthWrite(False)
         node_faces.show()
 
         # Create bottom face (always visible, 10cm thick)
-        self._create_bottom_face(vdata)
+        self._create_bottom_face(vdata)  
 
         # Edges only (no diagonals) — split bottom edges to make them thicker
         vdata2 = GeomVertexData('truck_edges', GeomVertexFormat.get_v3(), Geom.UHStatic)
@@ -75,9 +72,9 @@ class TruckScene:
         from panda3d.core import GeomLines
         # Bottom edges (0-1-2-3-0)
         lines_bottom = GeomLines(Geom.UHStatic)
-        bottom = [(0, 1), (1, 2), (2, 3), (3, 0)]
-        for a, b in bottom:
-            lines_bottom.addVertices(a, b)
+        bottom = [(0,1),(1,2),(2,3),(3,0)]
+        for a,b in bottom:
+            lines_bottom.addVertices(a,b)
             lines_bottom.closePrimitive()
         geom_edges_bottom = Geom(vdata2)
         geom_edges_bottom.addPrimitive(lines_bottom)
@@ -95,11 +92,11 @@ class TruckScene:
         # Other edges (top rectangle and verticals)
         lines_other = GeomLines(Geom.UHStatic)
         others = [
-            (4, 5), (5, 6), (6, 7), (7, 4),
-            (0, 4), (1, 5), (2, 6), (3, 7)
+            (4,5),(5,6),(6,7),(7,4),
+            (0,4),(1,5),(2,6),(3,7)
         ]
-        for a, b in others:
-            lines_other.addVertices(a, b)
+        for a,b in others:
+            lines_other.addVertices(a,b)
             lines_other.closePrimitive()
         geom_edges_other = Geom(vdata2)
         geom_edges_other.addPrimitive(lines_other)
@@ -121,55 +118,57 @@ class TruckScene:
         self.truck_edges_other = node_edges_other
         self.truck = node_edges_other
 
-        self._apply_tent_state()
+        # Отключаем освещение для всех объектов truck
+        node_faces.setLightOff(1)
+        node_edges_other.setLightOff(1)
+        node_edges_bottom.setLightOff(1)
 
+        self._apply_tent_state()
+        
     def _create_bottom_face(self, vdata):
         """Create always-visible bottom face with 10cm thickness"""
         from config import FLOOR_COLOR, BOX_LIFT_HEIGHT
-
-        bottom_thickness = 10
+        
+        bottom_thickness = 10  
         w = self.truck_width
         d = self.truck_depth
-        lift = BOX_LIFT_HEIGHT
-
+        lift = BOX_LIFT_HEIGHT 
+        
         bottom_vdata = GeomVertexData('bottom_face', GeomVertexFormat.get_v3(), Geom.UHStatic)
         bottom_vdata.setNumRows(8)
         bottom_vw = GeomVertexWriter(bottom_vdata, 'vertex')
-
+        
         fixed_lift = 130
-        bottom_level = lift + fixed_lift
+        bottom_level = lift + fixed_lift  
         bottom_verts = [
-            (-w / 2, -d / 2, bottom_level),  # 0: top front left (at box bottom level)
-            (w / 2, -d / 2, bottom_level),  # 1: top front right
-            (w / 2, d / 2, bottom_level),  # 2: top back right
-            (-w / 2, d / 2, bottom_level),  # 3: top back left
-            (-w / 2, -d / 2, bottom_level - bottom_thickness),  # 4: bottom front left (10cm below box)
-            (w / 2, -d / 2, bottom_level - bottom_thickness),  # 5: bottom front right
-            (w / 2, d / 2, bottom_level - bottom_thickness),  # 6: bottom back right
-            (-w / 2, d / 2, bottom_level - bottom_thickness)  # 7: bottom back left
+            (-w/2, -d/2, bottom_level),                    # 0: top front left (at box bottom level)
+            (w/2, -d/2, bottom_level),                     # 1: top front right  
+            (w/2, d/2, bottom_level),                      # 2: top back right
+            (-w/2, d/2, bottom_level),                     # 3: top back left
+            (-w/2, -d/2, bottom_level-bottom_thickness),  # 4: bottom front left (10cm below box)
+            (w/2, -d/2, bottom_level-bottom_thickness),   # 5: bottom front right
+            (w/2, d/2, bottom_level-bottom_thickness),    # 6: bottom back right 
+            (-w/2, d/2, bottom_level-bottom_thickness)    # 7: bottom back left
         ]
-
+        
         for v in bottom_verts:
             bottom_vw.addData3f(*v)
-
+            
+        
         bottom_tri = GeomTriangles(Geom.UHStatic)
-        bottom_tri.addVertices(0, 1, 2);
-        bottom_tri.addVertices(0, 2, 3)
-        bottom_tri.addVertices(4, 7, 6);
-        bottom_tri.addVertices(4, 6, 5)
+        bottom_tri.addVertices(0,1,2); 
+        bottom_tri.addVertices(0,2,3)
+        bottom_tri.addVertices(4,7,6); 
+        bottom_tri.addVertices(4,6,5)
 
-        bottom_tri.addVertices(0, 4, 5);
-        bottom_tri.addVertices(0, 5, 1)
-        bottom_tri.addVertices(1, 5, 6);
-        bottom_tri.addVertices(1, 6, 2)
-        bottom_tri.addVertices(2, 6, 7);
-        bottom_tri.addVertices(2, 7, 3)
-        bottom_tri.addVertices(3, 7, 4);
-        bottom_tri.addVertices(3, 4, 0)
-
+        bottom_tri.addVertices(0,4,5); bottom_tri.addVertices(0,5,1)  
+        bottom_tri.addVertices(1,5,6); bottom_tri.addVertices(1,6,2)  
+        bottom_tri.addVertices(2,6,7); bottom_tri.addVertices(2,7,3)  
+        bottom_tri.addVertices(3,7,4); bottom_tri.addVertices(3,4,0)  
+        
         bottom_geom = Geom(bottom_vdata)
         bottom_geom.addPrimitive(bottom_tri)
-
+        
         self.bottom_face_node = self.app.render.attachNewNode(GeomNode("truck_bottom_face"))
         self.bottom_face_node.node().addGeom(bottom_geom)
         self.bottom_face_node.setPos(0, 0, 0)
@@ -178,8 +177,9 @@ class TruckScene:
         self.bottom_face_node.clearRenderMode()
         self.bottom_face_node.setLightOff(1)
         r, g, b, _ = FLOOR_COLOR
-        self.bottom_face_node.setColor(r, g, b, 1.0)
+        self.bottom_face_node.setColor(r, g, b, 1.0)  
         self.bottom_face_node.show()
+
 
     def _create_ground(self):
         cm = CardMaker('ground')
@@ -188,6 +188,7 @@ class TruckScene:
         self.ground.setP(-90)
         self.ground.setTransparency(TransparencyAttrib.MAlpha)
         self.ground.setColor(0.2, 0.2, 0.2, 0.0)
+        # Отключаем освещение для ground
         self.ground.setLightOff(1)
 
     def set_tent_alpha(self, a: float):
@@ -204,7 +205,7 @@ class TruckScene:
             return
         self.truck_edges_other.show()
         r, g, b, _ = FLOOR_COLOR
-
+        
         self.truck_edges_other.setColor(r, g, b, 1.0)
         self.truck_edges_bottom.show()
         self.truck_edges_bottom.setColor(r, g, b, 1.0)
@@ -215,7 +216,7 @@ class TruckScene:
         alpha = 0.3 if self.tent_closed else 0.0
         self.truck_faces.setTransparency(TransparencyAttrib.MAlpha)
         self.truck_faces.clearRenderMode()
-        self.truck_faces.setColorScale(1.5, 1.5, 1.5, 1.0)
+        self.truck_faces.setColorScale(1.5, 1.5, 1.5, 1.0)  # Эмуляция emissiveColor
         self.truck_faces.setDepthWrite(False)
         self.truck_faces.setColor(r, g, b, alpha)
 
@@ -239,3 +240,4 @@ class TruckScene:
         self._create_truck_box()
         if self.floor:
             self.floor.removeNode()
+

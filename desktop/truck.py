@@ -67,14 +67,13 @@ class TruckScene:
         # Create bottom face (always visible, 10cm thick)
         self._create_bottom_face(vdata)
 
-        # Edges only (no diagonals) — split bottom edges to make them thicker
         vdata2 = GeomVertexData('truck_edges', GeomVertexFormat.get_v3(), Geom.UHStatic)
         vdata2.setNumRows(8)
         vw2 = GeomVertexWriter(vdata2, 'vertex')
         for v in verts:
             vw2.addData3f(*v)
         from panda3d.core import GeomLines
-        # Bottom edges (0-1-2-3-0)
+
         lines_bottom = GeomLines(Geom.UHStatic)
         bottom = [(0, 1), (1, 2), (2, 3), (3, 0)]
         for a, b in bottom:
@@ -84,13 +83,13 @@ class TruckScene:
         geom_edges_bottom.addPrimitive(lines_bottom)
         node_edges_bottom = self.app.render.attachNewNode(GeomNode("truck_edges_bottom"))
         node_edges_bottom.node().addGeom(geom_edges_bottom)
-        node_edges_bottom.setPos(0, 0, 0)  # Position at origin (vertices already include lift)
+        node_edges_bottom.setPos(0, 0, 0)
         node_edges_bottom.setTransparency(TransparencyAttrib.MAlpha)
         node_edges_bottom.setTwoSided(True)
 
         r, g, b, _ = FLOOR_COLOR
-        node_edges_bottom.setColor(r, g, b, 1.0)
-        node_edges_bottom.setRenderModeThickness(1.0)  # Тоньше как на картинке
+        node_edges_bottom.setColor(0, 0, 0, 1.0)
+        node_edges_bottom.setRenderModeThickness(1.0)
         node_edges_bottom.setDepthOffset(1)
 
         lines_other = GeomLines(Geom.UHStatic)
@@ -110,7 +109,7 @@ class TruckScene:
         node_edges_other.setTwoSided(True)
         # Set color like floor to make lines invisible
         r, g, b, _ = FLOOR_COLOR
-        node_edges_other.setColor(r, g, b, 1.0)
+        node_edges_other.setColor(0, 0, 0, 1.0)  # Черный цвет
         node_edges_other.setRenderModeThickness(1.0)  # Тоньше как на картинке
         node_edges_other.setDepthOffset(1)
 
@@ -129,7 +128,6 @@ class TruckScene:
         self._apply_tent_state()
 
     def _create_bottom_face(self, vdata):
-        """Create always-visible bottom face with 10cm thickness"""
         from config import FLOOR_COLOR, BOX_LIFT_HEIGHT
 
         bottom_thickness = 10
@@ -144,14 +142,14 @@ class TruckScene:
         fixed_lift = 130
         bottom_level = lift + fixed_lift
         bottom_verts = [
-            (-w / 2, -d / 2, bottom_level),  # 0: top front left (at box bottom level)
-            (w / 2, -d / 2, bottom_level),  # 1: top front right
-            (w / 2, d / 2, bottom_level),  # 2: top back right
-            (-w / 2, d / 2, bottom_level),  # 3: top back left
-            (-w / 2, -d / 2, bottom_level - bottom_thickness),  # 4: bottom front left (10cm below box)
-            (w / 2, -d / 2, bottom_level - bottom_thickness),  # 5: bottom front right
-            (w / 2, d / 2, bottom_level - bottom_thickness),  # 6: bottom back right
-            (-w / 2, d / 2, bottom_level - bottom_thickness)  # 7: bottom back left
+            (-w / 2, -d / 2, bottom_level),
+            (w / 2, -d / 2, bottom_level),
+            (w / 2, d / 2, bottom_level),
+            (-w / 2, d / 2, bottom_level),
+            (-w / 2, -d / 2, bottom_level - bottom_thickness),
+            (w / 2, -d / 2, bottom_level - bottom_thickness),
+            (w / 2, d / 2, bottom_level - bottom_thickness),
+            (-w / 2, d / 2, bottom_level - bottom_thickness)
         ]
 
         for v in bottom_verts:
@@ -211,9 +209,9 @@ class TruckScene:
         self.truck_edges_other.show()
         r, g, b, _ = FLOOR_COLOR
 
-        self.truck_edges_other.setColor(r, g, b, 1.0)
+        self.truck_edges_other.setColor(0, 0, 0, 1.0)
         self.truck_edges_bottom.show()
-        self.truck_edges_bottom.setColor(r, g, b, 1.0)
+        self.truck_edges_bottom.setColor(0, 0, 0, 1.0)
         self.truck_edges_bottom.setRenderModeThickness(1.0)
         self.truck_edges_other.setRenderModeThickness(1.0)
 
@@ -221,7 +219,7 @@ class TruckScene:
         alpha = 0.3 if self.tent_closed else 0.0
         self.truck_faces.setTransparency(TransparencyAttrib.MAlpha)
         self.truck_faces.clearRenderMode()
-        self.truck_faces.setColorScale(1.5, 1.5, 1.5, 1.0)  # Эмуляция emissiveColor
+        self.truck_faces.setColorScale(1.5, 1.5, 1.5, 1.0)
         self.truck_faces.setDepthWrite(False)
         self.truck_faces.setColor(r, g, b, alpha)
 

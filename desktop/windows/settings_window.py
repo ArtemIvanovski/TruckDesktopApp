@@ -141,13 +141,6 @@ class CameraControlWidget(QtWidgets.QWidget):
     def load_current_settings(self):
         settings = self.camera.get_camera_settings()
 
-        if self.graphics_manager:
-            settings = self.graphics_manager.get_graphics_settings()
-            if hasattr(settings, 'lighting_mode'):
-                index = self.lighting_mode_combo.findData(settings.lighting_mode)
-                if index >= 0:
-                    self.lighting_mode_combo.setCurrentIndex(index)
-
         for key, widget in self.widgets.items():
             value = getattr(settings, key, None)
             if value is not None:
@@ -157,11 +150,6 @@ class CameraControlWidget(QtWidgets.QWidget):
                     widget.setValue(value)
 
     def apply_settings(self):
-        if hasattr(self, 'lighting_mode_combo'):
-            selected_mode = self.lighting_mode_combo.currentData()
-            if selected_mode and self.graphics_manager:
-                self.graphics_manager.set_lighting_mode(selected_mode)
-
         settings_dict = {}
 
         for key, widget in self.widgets.items():
@@ -458,6 +446,12 @@ class GraphicsWidget(QtWidgets.QWidget):
                 settings_dict[key] = widget.isChecked()
             elif isinstance(widget, QtWidgets.QDoubleSpinBox):
                 settings_dict[key] = widget.value()
+
+        # Обработка комбобокса режима освещения
+        if hasattr(self, 'lighting_mode_combo'):
+            selected_mode = self.lighting_mode_combo.currentData()
+            if selected_mode:
+                self.graphics_manager.set_lighting_mode(selected_mode)
 
         self.graphics_manager.update_graphics_settings(**settings_dict)
 

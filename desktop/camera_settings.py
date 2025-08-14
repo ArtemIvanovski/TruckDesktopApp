@@ -1,6 +1,6 @@
 class CameraSettings:
     def __init__(self):
-        self.rotation_sensitivity = 2.0
+        self.rotation_sensitivity = 1.0
         self.pan_sensitivity = 0.5
         self.zoom_sensitivity = 0.02
 
@@ -10,7 +10,7 @@ class CameraSettings:
 
         self.min_radius = 150
         self.max_radius = 3500
-        self.max_beta = 1.5533  # (π/2) * 0.99
+        self.max_beta = 1.5708  # π/2 (90 градусов)
 
         self.invert_rotation_x = False
         self.invert_rotation_y = False

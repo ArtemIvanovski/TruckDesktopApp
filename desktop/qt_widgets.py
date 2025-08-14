@@ -4,7 +4,7 @@ import logging
 
 from PyQt5 import QtWidgets, QtCore, QtGui
 
-from app3d import TruckLoadingApp  # <-- Этот импорт должен быть
+from windows.settings_window import SettingsWindow
 from hotkeys import HotkeyController
 from qt_panels import LeftSidebar
 import sys
@@ -98,25 +98,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setCentralWidget(splitter)
         self.viewer.ready.connect(self._on_viewer_ready)
         self.hotkeys = HotkeyController(self)
-
-        toolbar = self.addToolBar("Main")
-        act_tent_open = toolbar.addAction("Открыть тент")
-        act_tent_close = toolbar.addAction("Закрыть тент")
-        toolbar.addSeparator()
-        act_view_reset = toolbar.addAction("Сброс вида")
-        act_fullscreen = toolbar.addAction("Полный экран")
-
-        act_tent_open.triggered.connect(lambda: self.viewer.app3d.set_tent_alpha(0.0))
-        act_tent_close.triggered.connect(lambda: self.viewer.app3d.set_tent_alpha(0.3))
-        act_view_reset.triggered.connect(self._view_reset)
-        act_fullscreen.triggered.connect(self._toggle_fullscreen)
+        self.setup_menu_bar()
         self.dock_r = None
-
         self.setStatusBar(None)
-
-        # Размеры бокса (веб-предустановки + свой размер)
-        # Устарело: теперь используется левый сайдбар
-        # self._init_size_tab()
 
     def _apply_dims(self):
         try:
@@ -207,6 +191,74 @@ class MainWindow(QtWidgets.QMainWindow):
             self.viewer.app3d.switch_truck(int(w), int(h), int(d))
         except Exception:
             pass
+
+    def setup_menu_bar(self):
+        menubar = self.menuBar()
+        menubar.setNativeMenuBar(False)
+
+        file_menu = menubar.addMenu('Файл')
+        file_menu.addAction('Новый', self.new_file)
+        file_menu.addAction('Открыть...', self.open_file)
+        file_menu.addAction('Сохранить', self.save_file)
+        file_menu.addAction('Сохранить как...', self.save_file_as)
+        file_menu.addSeparator()
+        file_menu.addAction('Выход', self.close)
+
+        settings_menu = menubar.addMenu('Настройки')
+        settings_menu.addAction('Настройки...', self.open_settings)
+
+        help_menu = menubar.addMenu('Помощь')
+        help_menu.addAction('Справка', self.show_help)
+        help_menu.addAction('Горячие клавиши', self.show_hotkeys)
+        help_menu.addSeparator()
+        help_menu.addAction('О программе', self.show_about)
+
+    def new_file(self):
+        print("Новый файл")
+
+    def open_file(self):
+        print("Открыть файл")
+
+    def save_file(self):
+        print("Сохранить файл")
+
+    def save_file_as(self):
+        print("Сохранить как")
+
+    def open_settings(self):
+        if hasattr(self.viewer, 'app3d') and self.viewer.app3d:
+            settings_window = SettingsWindow(self.viewer.app3d.arc, self)
+            settings_window.exec_()
+
+    def show_help(self):
+        QtWidgets.QMessageBox.information(
+            self, "Справка",
+            "Управление:\n\n"
+            "• ЛКМ - вращение камеры\n"
+            "• ПКМ - панорамирование\n"
+            "• Колесо мыши - масштабирование\n"
+            "• F12 - полный экран\n"
+            "• Esc - выход из полного экрана"
+        )
+
+    def show_hotkeys(self):
+        QtWidgets.QMessageBox.information(
+            self, "Горячие клавиши",
+            "F12 - Переключить полный экран\n"
+            "Esc - Выйти из полного экрана"
+        )
+
+    def show_about(self):
+        QtWidgets.QMessageBox.about(
+            self, "О программе",
+            "GTSTREAM\n\n"
+            "Система загрузки грузовиков\n"
+            "Версия 1.0\n\n"
+            "Разработано с использованием:\n"
+            "• Python\n"
+            "• PyQt5\n"
+            "• Panda3D"
+        )
 
     def _open_custom_dialog(self):
         dlg = QtWidgets.QDialog(self)

@@ -418,7 +418,6 @@ class TruckLoadingApp(ShowBase):
     def setup_controls(self):
         print("Setting up controls...")
 
-        # Убрать тестовые обработчики, оставить только реальные
         self.accept("mouse1", self.arc.on_right_down)  # Левая = вращение
         self.accept("mouse1-up", self.arc.on_right_up)
         self.accept("mouse3", self.arc.on_left_down)  # Правая = панорамирование

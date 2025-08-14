@@ -6,7 +6,6 @@ import math
 class CubicEase:
     @staticmethod
     def ease_in_out(t):
-        # CubicEase с EASINGMODE_EASEINOUT как в JS
         if t < 0.5:
             return 4 * t * t * t
         p = 2 * t - 2
@@ -14,7 +13,7 @@ class CubicEase:
 
 
 def spin_mesh(mesh, axis, rads, speed):
-    duration = 120.0 / speed  # 120 кадров со скоростью speed
+    duration = 120.0 / speed
 
     if axis == 'y':
         start_h = mesh.getH()

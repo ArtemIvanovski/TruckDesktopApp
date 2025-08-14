@@ -1,5 +1,6 @@
 from PyQt5 import QtWidgets, QtCore, QtGui
 from PyQt5.QtCore import QPropertyAnimation, QEasingCurve
+from app3d import TruckLoadingApp
 
 
 class LeftSidebar(QtWidgets.QWidget):
@@ -255,7 +256,7 @@ class LeftSidebar(QtWidgets.QWidget):
         grid = QtWidgets.QGridLayout(gb_custom)
         grid.setContentsMargins(8, 8, 8, 8)  # Удобные отступы
         grid.setSpacing(6)  # Комфортное расстояние между элементами
-        
+
         # Стиль для полей ввода
         input_style = """
             QLineEdit {
@@ -275,7 +276,7 @@ class LeftSidebar(QtWidgets.QWidget):
                 border-color: #95a5a6;
             }
         """
-        
+
         # Стиль для лейблов
         label_style = """
             QLabel {
@@ -284,24 +285,32 @@ class LeftSidebar(QtWidgets.QWidget):
                 color: #2c3e50;
             }
         """
-        
-        self.ed_w = QtWidgets.QLineEdit(); self.ed_h = QtWidgets.QLineEdit(); self.ed_d = QtWidgets.QLineEdit()
+
+        self.ed_w = QtWidgets.QLineEdit();
+        self.ed_h = QtWidgets.QLineEdit();
+        self.ed_d = QtWidgets.QLineEdit()
         for ed in (self.ed_w, self.ed_h, self.ed_d):
             ed.setMaxLength(4)
             ed.setValidator(QtGui.QIntValidator(1, 9999, w))
             ed.setPlaceholderText("см")
             ed.setStyleSheet(input_style)
             ed.setFixedHeight(24)  # Удобная высота для читаемости
-        
+
         # Создаем лейблы с стилем
-        lbl_w = QtWidgets.QLabel("Длина"); lbl_w.setStyleSheet(label_style)
-        lbl_h = QtWidgets.QLabel("Высота"); lbl_h.setStyleSheet(label_style)
-        lbl_d = QtWidgets.QLabel("Ширина"); lbl_d.setStyleSheet(label_style)
-        
-        grid.addWidget(lbl_w, 0, 0); grid.addWidget(self.ed_w, 0, 1)
-        grid.addWidget(lbl_h, 1, 0); grid.addWidget(self.ed_h, 1, 1)
-        grid.addWidget(lbl_d, 2, 0); grid.addWidget(self.ed_d, 2, 1)
-        
+        lbl_w = QtWidgets.QLabel("Длина");
+        lbl_w.setStyleSheet(label_style)
+        lbl_h = QtWidgets.QLabel("Высота");
+        lbl_h.setStyleSheet(label_style)
+        lbl_d = QtWidgets.QLabel("Ширина");
+        lbl_d.setStyleSheet(label_style)
+
+        grid.addWidget(lbl_w, 0, 0);
+        grid.addWidget(self.ed_w, 0, 1)
+        grid.addWidget(lbl_h, 1, 0);
+        grid.addWidget(self.ed_h, 1, 1)
+        grid.addWidget(lbl_d, 2, 0);
+        grid.addWidget(self.ed_d, 2, 1)
+
         self.cb_custom = QtWidgets.QCheckBox("Свой размер")
         self.cb_custom.setStyleSheet("""
             QCheckBox {
@@ -327,7 +336,7 @@ class LeftSidebar(QtWidgets.QWidget):
             }
         """)
         grid.addWidget(self.cb_custom, 3, 0, 1, 2)
-        
+
         btn_apply = QtWidgets.QPushButton("Применить")
         btn_apply.setStyleSheet("""
             QPushButton {
@@ -414,5 +423,3 @@ class LeftSidebar(QtWidgets.QWidget):
         app = self._app3d()
         if app:
             app.switch_truck(w, h, d)
-
-

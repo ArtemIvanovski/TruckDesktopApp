@@ -6,24 +6,21 @@ import sys
 import traceback
 from typing import Optional, Tuple
 
-from direct.gui import DirectGuiGlobals as DGG
 from direct.gui.DirectGui import *
 from direct.showbase.ShowBase import ShowBase
-from panda3d.core import Filename, Material, TransparencyAttrib
+from panda3d.core import Filename, Material
 from panda3d.core import (
     WindowProperties,
     AntialiasAttrib,
-    DirectionalLight,
-    AmbientLight,
     TextNode,
 )
 
 from camera import ArcCamera
 from config import BACKGROUND_COLOR, LANG, WHEEL_CABIN_HEIGHT
 from i18n import t
+from lighting import LightingManager
 from truck import TruckScene
 
-# Настройка логирования в самом начале
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -45,9 +42,9 @@ class TruckLoadingApp(ShowBase):
                  embed_parent_window: Optional[int] = None,
                  embed_size: Optional[Tuple[int, int]] = None,
                  enable_direct_gui: bool = True):
+        self.lighting_manager = None
         try:
             logger.info("Starting application...")
-            # If embedding into Qt, we must avoid creating the default window
             if embed_parent_window is not None or window_type == 'none':
                 ShowBase.__init__(self, windowType='none')
             else:
@@ -56,7 +53,7 @@ class TruckLoadingApp(ShowBase):
             self.is_embedded = embed_parent_window is not None or window_type == 'none'
 
             logger.info("Active language: %s; sample 'exit': %s", LANG, t(LANG, 'exit'))
-            # Window setup: standalone vs embedded
+
             if embed_parent_window is not None:
                 logger.info("Opening embedded Panda3D window...")
                 self._open_embedded_window(embed_parent_window, embed_size)
@@ -123,7 +120,6 @@ class TruckLoadingApp(ShowBase):
         self.win.requestProperties(props)
         self.setBackgroundColor(*BACKGROUND_COLOR)
         try:
-            # Ensure mouse watcher exists
             if not getattr(self, 'mouseWatcherNode', None):
                 self.setupMouse(self.win)
         except Exception:
@@ -142,7 +138,6 @@ class TruckLoadingApp(ShowBase):
         self.win = self.openWindow(props=props)
         self.setBackgroundColor(*BACKGROUND_COLOR)
         try:
-            # Ensure mouse watcher exists for embedded window
             if not getattr(self, 'mouseWatcherNode', None):
                 self.setupMouse(self.win)
         except Exception:
@@ -156,7 +151,6 @@ class TruckLoadingApp(ShowBase):
             self.win.requestProperties(props)
 
     def load_models(self):
-        """Loading .obj models with materials from .mtl"""
         logger.info("Starting models loading...")
 
         model_formats = [
@@ -183,12 +177,10 @@ class TruckLoadingApp(ShowBase):
             wheel_path = "weel.glb"
             lorry_path = "lorry.glb"
 
-        # Пробуем загрузить модель колеса
         self.wheel_model = None
         try:
             logger.info(f"Loading wheel model from {wheel_path}...")
 
-            # Для OBJ проверяем наличие MTL
             if wheel_path.endswith('.obj'):
                 mtl_path = wheel_path.replace('.obj', '.mtl')
                 if os.path.exists(mtl_path):
@@ -196,7 +188,6 @@ class TruckLoadingApp(ShowBase):
                 else:
                     logger.warning(f"Wheel material file not found: {mtl_path}")
 
-            # Загружаем модель (Panda3D автоматически загрузит материалы)
             self.wheel_model = self.loader.loadModel(wheel_path)
 
             if self.wheel_model and not self.wheel_model.isEmpty():
@@ -207,27 +198,20 @@ class TruckLoadingApp(ShowBase):
         except Exception as e:
             logger.error(f"Error loading wheel model: {e}")
 
-        # Настраиваем колесо
         if self.wheel_model and not self.wheel_model.isEmpty():
             logger.info("Configuring wheel model...")
 
-            # Создаем родительский узел для перемещения
             self.box_weel_move = self.render.attachNewNode("boxWeelMove")
             truck_long = max(1000, self.truck_width)
             weel_position = 50
             self.box_weel_move.setPos(weel_position - truck_long / 2, WHEEL_CABIN_HEIGHT, 0)
 
-            # Прикрепляем колесо и настраиваем трансформации
             self.wheel_model.reparentTo(self.box_weel_move)
             self.wheel_model.setScale(100, 100, 100)
             self.wheel_model.setTwoSided(True)
             self.wheel_model.setHpr(0, 90, 0)
             self.wheel_model.setPos(0, 125, 0)
 
-            # Отключаем освещение для колеса
-            self.wheel_model.setLightOff(1)
-
-            # Сохраняем оригинальные материалы (не перезаписываем!)
             materials = self.wheel_model.findAllMaterials()
             if materials:
                 logger.info(f"Wheel has {len(materials)} materials, keeping original")
@@ -266,23 +250,17 @@ class TruckLoadingApp(ShowBase):
         if self.lorry_model and not self.lorry_model.isEmpty():
             logger.info("Configuring cabin model...")
 
-            # Создаем родительский узел для перемещения
             self.box_lorry_move = self.render.attachNewNode("boxLorryMove")
             truck_long = max(1000, self.truck_width)
             lorry_position = -400
             self.box_lorry_move.setPos(lorry_position + truck_long / 2, WHEEL_CABIN_HEIGHT, 0)
 
-            # Прикрепляем кабину и настраиваем трансформации
             self.lorry_model.reparentTo(self.box_lorry_move)
             self.lorry_model.setScale(100, 100, 100)
             self.lorry_model.setTwoSided(True)
             self.lorry_model.setHpr(0, 90, 0)
             self.lorry_model.setPos(0, 125, 0)
 
-            # Отключаем освещение для кабины
-            self.lorry_model.setLightOff(1)
-
-            # Сохраняем оригинальные материалы (не перезаписываем!)
             materials = self.lorry_model.findAllMaterials()
             if materials:
                 logger.info(f"Cabin has {len(materials)} materials, keeping original")
@@ -300,33 +278,9 @@ class TruckLoadingApp(ShowBase):
         logger.info("Models loading completed")
 
     def setup_scene(self):
-        # Отключаем все эффекты, которые могут создавать "туман"
-        # self.render.setShaderAuto()
         self.render.setAntialias(AntialiasAttrib.MMultisample)
-        self.render.setTwoSided(True)
-        self.setBackgroundColor(0.35, 0.35, 0.35, 1)
-
-        # Отключаем автоматическое управление камерой
-        self.disableMouse()
-
-        # Настройки отображения - отключаем освещение для устранения теней
-        self.render.setAttrib(TransparencyAttrib.make(TransparencyAttrib.M_none))
-        self.render.setDepthOffset(0)
-        # Отключаем освещение для всей сцены
-        self.render.setLightOff(1)
-        
-        # Дополнительные настройки для отключения теней
-        from panda3d.core import ShaderAttrib
-        self.render.setShaderAuto(False)  # Отключаем автоматические шейдеры
-        self.render.setLightOff(1)  # Отключаем все источники света
-        
-        # Отключаем автоматическое освещение
-        self.render.setLightOff(1)
-        self.render.clearLight()
-
-        # Оптимизация рендеринга
-        self.setFrameRateMeter(True)
         self.setBackgroundColor(*BACKGROUND_COLOR)
+        self.disableMouse()
 
     def setup_camera(self):
         self.camLens.setFov(45.8)
@@ -337,20 +291,8 @@ class TruckLoadingApp(ShowBase):
         pass
 
     def setup_lighting(self):
-        # Полностью отключаем все источники света для устранения теней
-        dlight = DirectionalLight('hemispheric')
-        dlight.setColor((1.5, 1.5, 1.5, 1))
-        dlnp = self.render.attachNewNode(dlight)
-        dlnp.setHpr(-45, -45, 0)  # Соответствует вектору (-1, 1, -1)
-
-        # Отключаем ambient свет тоже
-        alight = AmbientLight('ambient')
-        alight.setColor((1.0, 1.0, 1.0, 1))  # Увеличиваем интенсивность для компенсации
-        alnp = self.render.attachNewNode(alight)
-
-        # Не устанавливаем никаких источников света
-        self.render.setLight(dlnp)  # Отключаем направленный свет
-        self.render.setLight(alnp)  # Отключаем ambient свет
+        self.lighting_manager = LightingManager(self)
+        self.lighting_manager.setup_hemispheric_lighting()
 
     def setup_truck(self):
         self.scene = TruckScene(self)
@@ -358,7 +300,6 @@ class TruckLoadingApp(ShowBase):
         self.truck_width = self.scene.truck_width
         self.truck_height = self.scene.truck_height
         self.truck_depth = self.scene.truck_depth
-
 
     def set_tent_alpha(self, alpha: float):
         self.scene.set_tent_alpha(alpha)
@@ -515,246 +456,3 @@ class TruckLoadingApp(ShowBase):
     def exit_app(self):
         """Выход из приложения"""
         sys.exit()
-
-
-if __name__ == "__main__":
-    from PyQt5 import QtWidgets, QtCore, QtGui
-    from qt_panels import LeftSidebar
-    from hotkeys import HotkeyController
-
-
-    class PandaWidget(QtWidgets.QWidget):
-        ready = QtCore.pyqtSignal()
-
-        def __init__(self, parent=None):
-            super().__init__(parent)
-            self.setAttribute(QtCore.Qt.WA_NativeWindow)
-            self.setAttribute(QtCore.Qt.WA_NoSystemBackground)
-            self.setAutoFillBackground(False)
-            self.setMinimumSize(800, 500)
-            self.app3d = None
-            self.timer = QtCore.QTimer(self)
-            self.timer.timeout.connect(self._step)
-            self.timer.start(16)
-            QtCore.QTimer.singleShot(0, self._init_panda)
-
-        def _init_panda(self):
-            try:
-                handle = int(self.winId())
-                dpr = 1.0
-                wh = self.window().windowHandle()
-                if wh:
-                    dpr = float(wh.devicePixelRatio())
-                w = int(max(1, round(self.width() * dpr)))
-                h = int(max(1, round(self.height() * dpr)))
-                logging.info(f"[Qt] Creating Panda3D with parent HWND={handle}, size=({w}x{h}), dpr={dpr}")
-                self.app3d = TruckLoadingApp(
-                    window_type='none',
-                    embed_parent_window=handle,
-                    embed_size=(w, h),
-                    enable_direct_gui=False,
-                )
-                self.ready.emit()
-            except Exception as e:
-                logging.error(f"[Qt] Failed to init Panda3D: {e}")
-
-        def _step(self):
-            try:
-                if self.app3d:
-                    self.app3d.taskMgr.step()
-            except Exception as e:
-                logging.error(f"[Qt] taskMgr.step error: {e}")
-
-        def resizeEvent(self, event):
-            if self.app3d and hasattr(self.app3d, 'resize_window'):
-                dpr = 1.0
-                wh = self.window().windowHandle()
-                if wh:
-                    dpr = float(wh.devicePixelRatio())
-                w = int(max(1, round(self.width() * dpr)))
-                h = int(max(1, round(self.height() * dpr)))
-                logging.info(f"[Qt] resizeEvent -> logical={self.width()}x{self.height()} physical={w}x{h} dpr={dpr}")
-                self.app3d.resize_window(w, h)
-            super().resizeEvent(event)
-
-
-    class MainWindow(QtWidgets.QMainWindow):
-        def __init__(self):
-            super().__init__()
-            self.setWindowTitle("GTSTREAM")
-            self.viewer = PandaWidget(self)
-            # Central splitter: left sidebar + 3D viewer
-            splitter = QtWidgets.QSplitter(QtCore.Qt.Horizontal, self)
-            # Left-side sidebar: thin vertical bar | panel container | 3D viewer
-            sidebar = LeftSidebar(lambda: self.viewer.app3d, self)
-            splitter.addWidget(sidebar)
-            splitter.addWidget(sidebar.panel_container)
-            splitter.addWidget(self.viewer)
-            splitter.setStretchFactor(0, 0)
-            splitter.setStretchFactor(1, 0)
-            splitter.setStretchFactor(2, 1)
-            self.setCentralWidget(splitter)
-            self.viewer.ready.connect(self._on_viewer_ready)
-            self.hotkeys = HotkeyController(self)
-
-            toolbar = self.addToolBar("Main")
-            act_tent_open = toolbar.addAction("Открыть тент")
-            act_tent_close = toolbar.addAction("Закрыть тент")
-            toolbar.addSeparator()
-            act_view_reset = toolbar.addAction("Сброс вида")
-            act_fullscreen = toolbar.addAction("Полный экран")
-
-            act_tent_open.triggered.connect(lambda: self.viewer.app3d.set_tent_alpha(0.0))
-            act_tent_close.triggered.connect(lambda: self.viewer.app3d.set_tent_alpha(0.3))
-            act_view_reset.triggered.connect(self._view_reset)
-            act_fullscreen.triggered.connect(self._toggle_fullscreen)
-            self.dock_r = None
-
-            self.setStatusBar(None)
-
-            # Размеры бокса (веб-предустановки + свой размер)
-            # Устарело: теперь используется левый сайдбар
-            # self._init_size_tab()
-
-        def _apply_dims(self):
-            try:
-                w = int(float(self.ed_w.text()))
-                h = int(float(self.ed_h.text()))
-                d = int(float(self.ed_d.text()))
-                self.viewer.app3d.switch_truck(w, h, d)
-            except Exception:
-                pass
-
-        def _on_viewer_ready(self):
-            logging.info("[Qt] Panda3D ready")
-
-        def _view_top(self):
-            cam = self.viewer.app3d.arc
-            cam.radius = 1400
-            cam.alpha = 3.14159265 / 2
-            cam.beta = 0.00001
-            cam.update()
-
-        def _view_left(self):
-            cam = self.viewer.app3d.arc
-            cam.radius = 1400
-            cam.alpha = 3.14159265 / 2
-            cam.beta = 3.14159265 / 2
-            cam.update()
-
-        def _view_right(self):
-            cam = self.viewer.app3d.arc
-            cam.radius = 1400
-            cam.alpha = -3.14159265 / 2
-            cam.beta = 3.14159265 / 2
-            cam.update()
-
-        def _view_reset(self):
-            cam = self.viewer.app3d.arc
-            cam.radius = 2000
-            cam.alpha = 3.14159265 / 2
-            cam.beta = 3.14159265 / 3
-            cam.target.set(0, 300, 0)
-            cam.update()
-
-        def _toggle_fullscreen(self):
-            if self.isFullScreen():
-                self.showNormal()
-            else:
-                self.showFullScreen()
-
-        def _init_size_tab(self):
-            dock = QtWidgets.QDockWidget("Параметры", self)
-            dock.setObjectName("dock_sizes")
-            dock.setFeatures(QtWidgets.QDockWidget.DockWidgetMovable | QtWidgets.QDockWidget.DockWidgetFloatable)
-            tabs = QtWidgets.QTabWidget(dock)
-            dock.setWidget(tabs)
-
-            tab_sizes = QtWidgets.QWidget()
-            tabs.addTab(tab_sizes, "Размеры бокса")
-            layout = QtWidgets.QVBoxLayout(tab_sizes)
-
-            group = QtWidgets.QButtonGroup(tab_sizes)
-            group.setExclusive(True)
-            presets = [
-                ("Тент 13.6", 1360, 260, 245),
-                ("Мега", 1360, 300, 245),
-                ("Конт 40ф", 1203, 239, 235),
-                ("Конт 20ф", 590, 239, 235),
-                ("Рефр", 1340, 239, 235),
-                ("Тент 16.5", 1650, 260, 245),
-            ]
-            self._size_radio_to_dims = {}
-            for title, w, h, d in presets:
-                rb = QtWidgets.QRadioButton(title)
-                layout.addWidget(rb)
-                rb.toggled.connect(lambda checked, W=w, H=h, D=d, BTN=rb: checked and self._apply_preset(W, H, D, BTN))
-                self._size_radio_to_dims[rb] = (w, h, d)
-
-            btn_custom = QtWidgets.QPushButton("Свой размер…")
-            btn_custom.clicked.connect(self._open_custom_dialog)
-            layout.addWidget(btn_custom)
-            layout.addStretch(1)
-
-            self.addDockWidget(QtCore.Qt.RightDockWidgetArea, dock)
-            self.dock_r = dock
-
-        def _apply_preset(self, w: int, h: int, d: int, button: QtWidgets.QAbstractButton):
-            # Подсветка выбранного пресета обеспечивает RadioButton
-            try:
-                self.viewer.app3d.switch_truck(int(w), int(h), int(d))
-            except Exception:
-                pass
-
-        def _open_custom_dialog(self):
-            dlg = QtWidgets.QDialog(self)
-            dlg.setWindowTitle("Свой размер")
-            form = QtWidgets.QFormLayout(dlg)
-            ed_w = QtWidgets.QLineEdit(dlg)
-            ed_h = QtWidgets.QLineEdit(dlg)
-            ed_d = QtWidgets.QLineEdit(dlg)
-            for ed in (ed_w, ed_h, ed_d):
-                ed.setMaxLength(4)
-                ed.setValidator(QtGui.QIntValidator(1, 9999, dlg))
-            form.addRow("Длина (см)", ed_w)
-            form.addRow("Высота (см)", ed_h)
-            form.addRow("Ширина (см)", ed_d)
-            btns = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel,
-                                              parent=dlg)
-            form.addRow(btns)
-
-            def on_accept():
-                try:
-                    w = int(ed_w.text())
-                    h = int(ed_h.text())
-                    d = int(ed_d.text())
-                except Exception:
-                    return
-                self.viewer.app3d.switch_truck(w, h, d)
-                dlg.accept()
-
-            btns.accepted.connect(on_accept)
-            btns.rejected.connect(dlg.reject)
-            dlg.exec_()
-
-
-    def _load_qt_fonts():
-        try:
-            base_dir = os.path.dirname(__file__)
-            font_candidates = [
-                os.path.join(base_dir, 'fonts', 'NotoSans_Condensed-Regular.ttf'),
-                os.path.join(base_dir, 'fonts', 'NotoSans-Regular.ttf'),
-                os.path.join(base_dir, 'fonts', 'arial.ttf'),
-            ]
-            for path in font_candidates:
-                if os.path.exists(path):
-                    QtGui.QFontDatabase.addApplicationFont(path)
-        except Exception:
-            pass
-
-
-    qt_app = QtWidgets.QApplication(sys.argv)
-    _load_qt_fonts()
-    win = MainWindow()
-    win.showMaximized()
-    sys.exit(qt_app.exec_())

@@ -1,27 +1,20 @@
-BACKGROUND_COLOR = (0.35, 0.35, 0.35)  # #333333 вместо #262626
-# Пол внутри коробки (прицепа) должен быть всегда залит цветом #c3c3c3
-# #c3c3c3 -> (195/255, 195/255, 195/255) ~= (0.7647, 0.7647, 0.7647)
+BACKGROUND_COLOR = (0.35, 0.35, 0.35)
 FLOOR_COLOR = (0.7647059, 0.7647059, 0.7647059, 1.0)
-FLOOR_HEIGHT = 250  # нижняя плоскость прицепа
-FLOOR_ALPHA = 0.4  # прозрачность пола как в web
-FLOOR_Z_OFFSET = -5  # как в веб-версии: пол на -5 см ниже земли
+FLOOR_HEIGHT = 250
+FLOOR_ALPHA = 0.4
+FLOOR_Z_OFFSET = -5
 
-# Толщина пола прицепа (в см, как в web версии ~10)
 FLOOR_THICKNESS = 10
 
-# Высота подъема боксов над землей (в см) - как в веб-версии на уровне земли
 BOX_LIFT_HEIGHT = 0
 
-# Высота размещения колес и кабины (в см) - как в веб-версии на -125 см
 WHEEL_CABIN_HEIGHT = -125
 
-# Цвет стенок при закрытом тенте (#aeaeae)
 TRUCK_CLOSED_COLOR = (0.682, 0.682, 0.682, 1.0)
 
-# Lighting mode: 'none' | 'ambient' | 'web'
-LIGHTING_MODE = 'none'
+HEMISPHERIC_LIGHT_INTENSITY = 1.5
+HEMISPHERIC_LIGHT_DIRECTION = (-1, 1, -1)  
 
-# Локаль по умолчанию
 LANG = 'ru'
 
 

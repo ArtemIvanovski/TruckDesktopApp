@@ -8,9 +8,9 @@ class CameraSettings:
         self.damping = 0.85
         self.min_velocity = 0.001
 
-        self.min_radius = 150
-        self.max_radius = 3500
-        self.max_beta = 1.5708  # π/2 (90 градусов)
+        self.min_radius = 0
+        self.max_radius = 7200
+        self.max_beta = 1.5708
 
         self.invert_rotation_x = False
         self.invert_rotation_y = False

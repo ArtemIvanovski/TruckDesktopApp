@@ -9,13 +9,11 @@ class ArcCamera:
         self.base = base
         self.settings = CameraSettings()
 
-        # Позиция камеры
         self.target = Point3(0, 0, 0)
         self.radius = 2000
         self.alpha = math.pi / 2
         self.beta = math.pi / 3
 
-        # Состояния
         self.rotating = False
         self.panning = False
         self.last_x = 0

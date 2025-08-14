@@ -18,7 +18,7 @@ from panda3d.core import (
 from camera import ArcCamera
 from config import BACKGROUND_COLOR, LANG, WHEEL_CABIN_HEIGHT
 from i18n import t
-from lighting import LightingManager
+from graphics_settings import GraphicsManager
 from truck import TruckScene
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -42,7 +42,7 @@ class TruckLoadingApp(ShowBase):
                  embed_parent_window: Optional[int] = None,
                  embed_size: Optional[Tuple[int, int]] = None,
                  enable_direct_gui: bool = True):
-        self.lighting_manager = None
+        self.graphics_manager = None  # Заменили lighting_manager на graphics_manager
         try:
             logger.info("Starting application...")
             if embed_parent_window is not None or window_type == 'none':
@@ -70,9 +70,10 @@ class TruckLoadingApp(ShowBase):
             self.setup_camera()
             logger.info("Camera configured")
 
-            logger.info("Setting up lighting...")
-            self.setup_lighting()
-            logger.info("Lighting configured")
+            logger.info("Setting up graphics...")
+            self.setup_graphics()
+            self.graphics_manager.apply_all_settings()
+            logger.info("Graphics configured")
 
             logger.info("Setting up truck...")
             self.setup_truck()
@@ -85,13 +86,6 @@ class TruckLoadingApp(ShowBase):
             logger.info("Loading models...")
             self.load_models()
             logger.info("Models loaded")
-
-            # Optional Panda3D DirectGUI (disabled when using Qt)
-            self.enable_direct_gui = enable_direct_gui
-            if self.enable_direct_gui:
-                logger.info("Setting up DirectGUI...")
-                self.setup_gui()
-                logger.info("DirectGUI configured")
 
             logger.info("Setting up controls...")
             self.setup_controls()
@@ -151,24 +145,14 @@ class TruckLoadingApp(ShowBase):
             self.win.requestProperties(props)
 
     def remove_material_specular(self, model):
-        """Сделать настройки с бликами и без mat.setSpecular(Vec4(0, 0, 0, 1)) меняем на все 1111"""
         if not model or model.isEmpty():
             return
 
         from panda3d.core import Vec4
 
-        materials = model.findAllMaterials()
-        for material in materials:
-            material.setSpecular(Vec4(0, 0, 0, 1))
-            material.setShininess(32)
-            material.setAmbient(Vec4(1, 1, 1, 1))
-
-        for node in model.findAllMatches("**"):
-            if node.hasMaterial():
-                mat = node.getMaterial()
-                mat.setSpecular(Vec4(0, 0, 0, 1))
-                mat.setShininess(32)
-                mat.setAmbient(Vec4(1, 1, 1, 1))
+        if self.graphics_manager:
+            enabled = self.graphics_manager.settings.enable_specular
+            self.graphics_manager._update_model_specular(model, enabled)
 
     def load_models(self):
         logger.info("Starting models loading...")
@@ -294,6 +278,10 @@ class TruckLoadingApp(ShowBase):
 
         logger.info("Models loading completed")
 
+        if self.graphics_manager:
+            logger.info("Applying saved graphics settings to loaded models...")
+            self.graphics_manager.apply_all_settings()
+
     def setup_scene(self):
         self.render.setAntialias(AntialiasAttrib.MMultisample)
         self.setBackgroundColor(*BACKGROUND_COLOR)
@@ -304,12 +292,9 @@ class TruckLoadingApp(ShowBase):
         self.arc = ArcCamera(self)
         self.taskMgr.add(self.arc.tick, "camera_update")
 
-    def update_camera_position(self):
-        pass
-
-    def setup_lighting(self):
-        self.lighting_manager = LightingManager(self)
-        self.lighting_manager.setup_hemispheric_lighting()
+    def setup_graphics(self):  # Заменили setup_lighting на setup_graphics
+        self.graphics_manager = GraphicsManager(self)
+        self.graphics_manager.setup_lighting()
 
     def setup_truck(self):
         self.scene = TruckScene(self)
@@ -340,87 +325,34 @@ class TruckLoadingApp(ShowBase):
         if hasattr(self.scene, 'tent_closed'):
             self.scene.set_tent_closed(self.scene.tent_closed)
 
-    def setup_gui(self):
-        # Try to load a font with Cyrillic support, with extra logging and fallbacks
-        try:
-            fonts_dir = os.path.join(os.path.dirname(__file__), 'fonts')
-            candidates = [
-                os.path.join(fonts_dir, 'arial.ttf'),
-                os.path.join(fonts_dir, 'NotoSans-Regular.ttf'),
-                os.path.join(fonts_dir, 'NotoSans_Condensed-Regular.ttf'),
-                os.path.join(os.environ.get('WINDIR', 'C:\\Windows'), 'Fonts', 'arial.ttf'),
-            ]
-            self.ui_font = None
-            for path in candidates:
-                try:
-                    # Normalize to Panda Filename (handles Windows paths)
-                    panda_fn = Filename.fromOsSpecific(path)
-                    panda_fn.makeTrueCase()
-                    exists = panda_fn.exists() or os.path.exists(path)
-                    if exists:
-                        logger.info(f"Trying UI font: {path}")
-                        font = self.loader.loadFont(panda_fn)
-                        if font:
-                            self.ui_font = font
-                            logger.info(f"Using UI font: {path}")
-                            break
-                        else:
-                            logger.warning(f"loadFont returned None for {path}")
-                except Exception as e:
-                    logger.error(f"Error loading font {path}: {e}")
-            if not self.ui_font:
-                logger.warning("No valid UI font found; Cyrillic may not render")
-            else:
-                try:
-                    DGG.setDefaultFont(self.ui_font)
-                    logger.info("Default GUI font set globally")
-                except Exception as e:
-                    logger.error(f"Failed to set default GUI font: {e}")
-        except Exception as e:
-            logger.error(f"Unexpected error in setup_gui font selection: {e}")
-            self.ui_font = None
-        logger.debug(f"Creating Exit button with font: {self.ui_font}")
-        self.exit_button = DirectButton(
-            text=t(LANG, 'exit'),
-            scale=0.05,
-            pos=(1.7, 0, -0.9),
-            command=self.exit_app,
-            text_fg=(1, 1, 1, 1),
-            frameColor=(0.47, 0.59, 0.71, 1),  # #7796b4
-            relief=DGG.RAISED,
-            text_font=self.ui_font if self.ui_font else None
-        )
+    def set_background_color(self, r: float, g: float, b: float):
+        """Установить цвет фона"""
+        if self.graphics_manager:
+            self.graphics_manager.set_background_color(r, g, b)
 
-        # Information text (updated to match web controls, сдвинут вниз под табы)
-        logger.debug("Creating info_text. Using Cyrillic string? %s", t(LANG, 'controls_hint'))
-        self.info_text = OnscreenText(
-            text=t(LANG, 'controls_hint'),
-            pos=(-1.7, 0.35),  # Сдвинут вниз под табы
-            scale=0.04,
-            fg=(1, 1, 1, 1),
-            align=TextNode.ALeft,
-            font=self.ui_font if self.ui_font else None
-        )
+    def set_specular_enabled(self, enabled: bool):
+        """Включить/выключить блики"""
+        if self.graphics_manager:
+            self.graphics_manager.set_specular_enabled(enabled)
 
-        # Zone load indicators (like in web version, сдвинуты вниз под табы)
-        self.zone_indicators = []
-        for i in range(4):
-            zone_text = OnscreenText(
-                text=t(LANG, 'zone', i=i + 1, w=0),
-                pos=(0.0 + i * 0.4 - 0.6, 0.35),  # Сдвинуты вниз под табы
-                scale=0.05,
-                fg=(1, 1, 1, 1),
-                align=TextNode.ACenter,
-                font=self.ui_font if self.ui_font else None
-            )
-            self.zone_indicators.append(zone_text)
+    def set_truck_color(self, r: float, g: float, b: float):
+        """Установить цвет тягача"""
+        if self.graphics_manager:
+            self.graphics_manager.set_truck_color(r, g, b)
 
+    def set_lighting_intensity(self, main_intensity: float, fill_intensity: float):
+        if self.graphics_manager:
+            self.graphics_manager.set_light_intensity(main_intensity, fill_intensity)
+
+    def set_lighting_mode(self, mode: str):
+        if self.graphics_manager:
+            self.graphics_manager.set_lighting_mode(mode)
     def setup_controls(self):
         print("Setting up controls...")
 
-        self.accept("mouse1", self.arc.on_right_down)  # Левая = вращение
+        self.accept("mouse1", self.arc.on_right_down)
         self.accept("mouse1-up", self.arc.on_right_up)
-        self.accept("mouse3", self.arc.on_left_down)  # Правая = панорамирование
+        self.accept("mouse3", self.arc.on_left_down)
         self.accept("mouse3-up", self.arc.on_left_up)
         self.accept("wheel_up", self.arc.on_wheel_in)
         self.accept("wheel_down", self.arc.on_wheel_out)
@@ -428,27 +360,6 @@ class TruckLoadingApp(ShowBase):
         self.accept("shift-up", self.shift_up)
 
         print("Controls setup complete")
-
-    def start_camera_rotate(self):
-        self.arc.start_rotate()
-
-    def stop_camera_rotate(self):
-        self.arc.stop_rotate()
-
-    def start_camera_pan(self):
-        self.arc.start_pan()
-
-    def stop_camera_pan(self):
-        self.arc.stop_pan()
-
-    def update_camera_task(self, task):
-        return task.cont
-
-    def zoom_in(self):
-        self.arc.on_wheel_in()
-
-    def zoom_out(self):
-        self.arc.on_wheel_out()
 
     def shift_down(self):
         """Нажатие Shift"""
@@ -466,7 +377,3 @@ class TruckLoadingApp(ShowBase):
             'depth': self.truck_depth
         }
         self.trucks.append(first_truck)
-
-    def exit_app(self):
-        """Выход из приложения"""
-        sys.exit()

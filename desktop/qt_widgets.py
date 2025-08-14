@@ -227,7 +227,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def open_settings(self):
         if hasattr(self.viewer, 'app3d') and self.viewer.app3d:
-            settings_window = SettingsWindow(self.viewer.app3d.arc, self)
+            # Передаем как камеру, так и graphics_manager
+            graphics_manager = getattr(self.viewer.app3d, 'graphics_manager', None)
+            settings_window = SettingsWindow(self.viewer.app3d.arc, graphics_manager, self)
             settings_window.exec_()
 
     def show_help(self):

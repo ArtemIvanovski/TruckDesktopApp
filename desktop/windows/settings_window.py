@@ -1,5 +1,6 @@
 from PyQt5 import QtWidgets, QtCore, QtGui
-from camera_settings import CameraSettings
+
+from desktop.graphics_settings import LIGHTING_PRESETS
 
 
 class CameraControlWidget(QtWidgets.QWidget):
@@ -140,6 +141,13 @@ class CameraControlWidget(QtWidgets.QWidget):
     def load_current_settings(self):
         settings = self.camera.get_camera_settings()
 
+        if self.graphics_manager:
+            settings = self.graphics_manager.get_graphics_settings()
+            if hasattr(settings, 'lighting_mode'):
+                index = self.lighting_mode_combo.findData(settings.lighting_mode)
+                if index >= 0:
+                    self.lighting_mode_combo.setCurrentIndex(index)
+
         for key, widget in self.widgets.items():
             value = getattr(settings, key, None)
             if value is not None:
@@ -149,6 +157,11 @@ class CameraControlWidget(QtWidgets.QWidget):
                     widget.setValue(value)
 
     def apply_settings(self):
+        if hasattr(self, 'lighting_mode_combo'):
+            selected_mode = self.lighting_mode_combo.currentData()
+            if selected_mode and self.graphics_manager:
+                self.graphics_manager.set_lighting_mode(selected_mode)
+
         settings_dict = {}
 
         for key, widget in self.widgets.items():
@@ -242,17 +255,239 @@ class CameraControlWidget(QtWidgets.QWidget):
 
 
 class GraphicsWidget(QtWidgets.QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, graphics_manager, parent=None):
         super().__init__(parent)
+        self.graphics_manager = graphics_manager
+        self.widgets = {}
         self.setup_ui()
+        self.load_current_settings()
 
     def setup_ui(self):
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(30, 30, 30, 30)
         layout.setSpacing(25)
 
-        group = QtWidgets.QGroupBox("Настройки графики")
-        group.setStyleSheet("""
+        scroll = QtWidgets.QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QtWidgets.QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
+        scroll.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
+
+        content = QtWidgets.QWidget()
+        content_layout = QtWidgets.QVBoxLayout(content)
+        content_layout.setSpacing(25)
+
+        self.create_lighting_group(content_layout)
+        self.create_materials_group(content_layout)
+        self.create_colors_group(content_layout)
+
+        content_layout.addStretch()
+        scroll.setWidget(content)
+        layout.addWidget(scroll)
+
+        self.create_buttons(layout)
+
+    def create_lighting_group(self, layout):
+        group = QtWidgets.QGroupBox("Освещение")
+        group.setStyleSheet(self.get_group_style())
+        form = QtWidgets.QFormLayout(group)
+        form.setSpacing(12)
+        form.setFieldGrowthPolicy(QtWidgets.QFormLayout.ExpandingFieldsGrow)
+
+        self.widgets['lighting_enabled'] = QtWidgets.QCheckBox()
+        self.widgets['lighting_enabled'].setStyleSheet(self.get_checkbox_style())
+
+        self.lighting_mode_combo = QtWidgets.QComboBox()
+        self.lighting_mode_combo.setMinimumWidth(250)
+        for mode, preset in LIGHTING_PRESETS.items():
+            self.lighting_mode_combo.addItem(preset["name"], mode)
+
+        form.addRow("Включить освещение:", self.widgets['lighting_enabled'])
+        form.addRow("Режим освещения:", self.lighting_mode_combo)
+
+        layout.addWidget(group)
+
+    def create_materials_group(self, layout):
+        group = QtWidgets.QGroupBox("Материалы")
+        group.setStyleSheet(self.get_group_style())
+        form = QtWidgets.QFormLayout(group)
+        form.setSpacing(12)
+        form.setFieldGrowthPolicy(QtWidgets.QFormLayout.ExpandingFieldsGrow)
+
+        self.widgets['enable_specular'] = QtWidgets.QCheckBox()
+        self.widgets['enable_specular'].setStyleSheet(self.get_checkbox_style())
+
+        form.addRow("Включить блики:", self.widgets['enable_specular'])
+
+        layout.addWidget(group)
+
+    def create_colors_group(self, layout):
+        group = QtWidgets.QGroupBox("Цвета")
+        group.setStyleSheet(self.get_group_style())
+        form = QtWidgets.QFormLayout(group)
+        form.setSpacing(12)
+        form.setFieldGrowthPolicy(QtWidgets.QFormLayout.ExpandingFieldsGrow)
+
+        # Цвет фона
+        self.background_color_btn = QtWidgets.QPushButton()
+        self.background_color_btn.setMinimumHeight(30)
+        self.background_color_btn.clicked.connect(self.choose_background_color)
+        form.addRow("Цвет фона:", self.background_color_btn)
+
+        # Цвет тягача
+        self.truck_color_btn = QtWidgets.QPushButton()
+        self.truck_color_btn.setMinimumHeight(30)
+        self.truck_color_btn.clicked.connect(self.choose_truck_color)
+        form.addRow("Цвет тягача:", self.truck_color_btn)
+
+        layout.addWidget(group)
+
+    def create_buttons(self, layout):
+        button_layout = QtWidgets.QHBoxLayout()
+        button_layout.addStretch()
+
+        apply_btn = QtWidgets.QPushButton("Применить")
+        apply_btn.setStyleSheet(self.get_button_style())
+        apply_btn.setMinimumWidth(100)
+        apply_btn.clicked.connect(self.apply_settings)
+
+        reset_btn = QtWidgets.QPushButton("Сбросить")
+        reset_btn.setStyleSheet(self.get_button_style())
+        reset_btn.setMinimumWidth(100)
+        reset_btn.clicked.connect(self.reset_settings)
+
+        button_layout.addWidget(reset_btn)
+        button_layout.addWidget(apply_btn)
+        layout.addLayout(button_layout)
+
+    def create_spin_box(self, min_val, max_val, step, decimals):
+        spin = QtWidgets.QDoubleSpinBox()
+        spin.setRange(min_val, max_val)
+        spin.setSingleStep(step)
+        spin.setDecimals(decimals)
+        spin.setMinimumWidth(120)
+        spin.setStyleSheet(self.get_spinbox_style())
+        return spin
+
+    def load_current_settings(self):
+        if not self.graphics_manager:
+            return
+
+        settings = self.graphics_manager.get_graphics_settings()
+
+        # Загружаем значения в виджеты
+        if 'lighting_enabled' in self.widgets:
+            self.widgets['lighting_enabled'].setChecked(settings.lighting_enabled)
+        if 'main_light_intensity' in self.widgets:
+            self.widgets['main_light_intensity'].setValue(settings.main_light_intensity)
+        if 'fill_light_intensity' in self.widgets:
+            self.widgets['fill_light_intensity'].setValue(settings.fill_light_intensity)
+        if 'enable_specular' in self.widgets:
+            self.widgets['enable_specular'].setChecked(settings.enable_specular)
+
+        # Обновляем цвета кнопок
+        self.update_background_color_button(settings.background_color)
+        self.update_truck_color_button(settings.truck_color)
+
+    def update_background_color_button(self, color):
+        r, g, b = color
+        hex_color = f"#{int(r * 255):02x}{int(g * 255):02x}{int(b * 255):02x}"
+        self.background_color_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {hex_color};
+                border: 2px solid #888;
+                border-radius: 4px;
+            }}
+            QPushButton:hover {{
+                border: 2px solid #0078d4;
+            }}
+        """)
+        self.background_color_btn.setText(f"RGB({int(r * 255)}, {int(g * 255)}, {int(b * 255)})")
+
+    def update_truck_color_button(self, color):
+        r, g, b = color
+        hex_color = f"#{int(r * 255):02x}{int(g * 255):02x}{int(b * 255):02x}"
+        self.truck_color_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {hex_color};
+                border: 2px solid #888;
+                border-radius: 4px;
+            }}
+            QPushButton:hover {{
+                border: 2px solid #0078d4;
+            }}
+        """)
+        self.truck_color_btn.setText(f"RGB({int(r * 255)}, {int(g * 255)}, {int(b * 255)})")
+
+    def choose_background_color(self):
+        if not self.graphics_manager:
+            return
+
+        settings = self.graphics_manager.get_graphics_settings()
+        r, g, b = settings.background_color
+        current_color = QtGui.QColor(int(r * 255), int(g * 255), int(b * 255))
+
+        color = QtWidgets.QColorDialog.getColor(current_color, self, "Выберите цвет фона")
+        if color.isValid():
+            new_color = (color.red() / 255.0, color.green() / 255.0, color.blue() / 255.0)
+            self.graphics_manager.update_graphics_settings(background_color=new_color)
+            self.update_background_color_button(new_color)
+
+    def choose_truck_color(self):
+        if not self.graphics_manager:
+            return
+
+        settings = self.graphics_manager.get_graphics_settings()
+        r, g, b = settings.truck_color
+        current_color = QtGui.QColor(int(r * 255), int(g * 255), int(b * 255))
+
+        color = QtWidgets.QColorDialog.getColor(current_color, self, "Выберите цвет тягача")
+        if color.isValid():
+            new_color = (color.red() / 255.0, color.green() / 255.0, color.blue() / 255.0)
+            self.graphics_manager.update_graphics_settings(truck_color=new_color)
+            self.update_truck_color_button(new_color)
+
+    def apply_settings(self):
+        if not self.graphics_manager:
+            return
+
+        settings_dict = {}
+
+        for key, widget in self.widgets.items():
+            if isinstance(widget, QtWidgets.QCheckBox):
+                settings_dict[key] = widget.isChecked()
+            elif isinstance(widget, QtWidgets.QDoubleSpinBox):
+                settings_dict[key] = widget.value()
+
+        self.graphics_manager.update_graphics_settings(**settings_dict)
+
+        msg = QtWidgets.QMessageBox()
+        msg.setIcon(QtWidgets.QMessageBox.Information)
+        msg.setWindowTitle("Настройки")
+        msg.setText("Настройки графики применены успешно!")
+        msg.exec_()
+
+    def reset_settings(self):
+        reply = QtWidgets.QMessageBox.question(
+            self, 'Сброс настроек',
+            'Вы уверены, что хотите сбросить все настройки графики до заводских?',
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+            QtWidgets.QMessageBox.No
+        )
+
+        if reply == QtWidgets.QMessageBox.Yes:
+            if self.graphics_manager:
+                self.graphics_manager.reset_graphics_settings()
+                self.load_current_settings()
+
+                msg = QtWidgets.QMessageBox()
+                msg.setIcon(QtWidgets.QMessageBox.Information)
+                msg.setWindowTitle("Настройки")
+                msg.setText("Настройки графики сброшены до заводских!")
+                msg.exec_()
+
+    def get_group_style(self):
+        return """
             QGroupBox {
                 font-weight: bold;
                 font-size: 13px;
@@ -266,27 +501,47 @@ class GraphicsWidget(QtWidgets.QWidget):
                 left: 8px;
                 padding: 0 4px 0 4px;
             }
-        """)
-        form = QtWidgets.QFormLayout(group)
-        form.setSpacing(12)
-        form.setFieldGrowthPolicy(QtWidgets.QFormLayout.ExpandingFieldsGrow)
+        """
 
-        antialiasing_cb = QtWidgets.QCheckBox()
-        antialiasing_cb.setChecked(True)
-        form.addRow("Сглаживание:", antialiasing_cb)
+    def get_spinbox_style(self):
+        return """
+            QDoubleSpinBox {
+                padding: 4px;
+                border: 1px solid #c0c0c0;
+                border-radius: 2px;
+            }
+            QDoubleSpinBox:focus {
+                border: 2px solid #0078d4;
+            }
+        """
 
-        vsync_cb = QtWidgets.QCheckBox()
-        vsync_cb.setChecked(True)
-        form.addRow("Вертикальная синхронизация:", vsync_cb)
+    def get_checkbox_style(self):
+        return """
+            QCheckBox {
+                spacing: 6px;
+            }
+            QCheckBox::indicator {
+                width: 16px;
+                height: 16px;
+            }
+        """
 
-        quality_combo = QtWidgets.QComboBox()
-        quality_combo.addItems(["Низкое", "Среднее", "Высокое", "Ультра"])
-        quality_combo.setCurrentText("Высокое")
-        quality_combo.setMinimumWidth(120)
-        form.addRow("Качество:", quality_combo)
-
-        layout.addWidget(group)
-        layout.addStretch()
+    def get_button_style(self):
+        return """
+            QPushButton {
+                padding: 8px 16px;
+                border: 1px solid #c0c0c0;
+                border-radius: 2px;
+                background-color: #f0f0f0;
+            }
+            QPushButton:hover {
+                background-color: #e0e0e0;
+                border: 1px solid #0078d4;
+            }
+            QPushButton:pressed {
+                background-color: #d0d0d0;
+            }
+        """
 
 
 class GeneralWidget(QtWidgets.QWidget):
@@ -338,9 +593,10 @@ class GeneralWidget(QtWidgets.QWidget):
 
 
 class SettingsWindow(QtWidgets.QDialog):
-    def __init__(self, camera, parent=None):
+    def __init__(self, camera, graphics_manager=None, parent=None):
         super().__init__(parent)
         self.camera = camera
+        self.graphics_manager = graphics_manager
         self.search_index = {}
         self.setWindowTitle("Настройки")
         self.setModal(True)
@@ -446,7 +702,7 @@ class SettingsWindow(QtWidgets.QDialog):
         self.content_stack = QtWidgets.QStackedWidget()
 
         camera_widget = CameraControlWidget(self.camera, self)
-        graphics_widget = GraphicsWidget(self)
+        graphics_widget = GraphicsWidget(self.graphics_manager, self)
         general_widget = GeneralWidget(self)
 
         self.content_stack.addWidget(camera_widget)
@@ -502,10 +758,14 @@ class SettingsWindow(QtWidgets.QDialog):
             'инвертировать': 'Управление',
             'ограничения': 'Управление',
             'чувствительность': 'Управление',
-            'сглаживание': 'Графика',
-            'синхронизация': 'Графика',
-            'качество': 'Графика',
-            'vsync': 'Графика',
+            'освещение': 'Графика',
+            'свет': 'Графика',
+            'интенсивность': 'Графика',
+            'блики': 'Графика',
+            'материалы': 'Графика',
+            'цвет': 'Графика',
+            'фон': 'Графика',
+            'тягач': 'Графика',
             'автосохранение': 'Общие',
             'резервные': 'Общие',
             'копии': 'Общие',

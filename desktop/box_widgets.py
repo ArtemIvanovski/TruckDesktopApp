@@ -506,14 +506,11 @@ class BoxRectWidget(QtWidgets.QWidget):
 
 
 class BoxListWidget(QtWidgets.QWidget):
-    """Виджет для отображения списка всех коробок"""
-
     def __init__(self, box_manager: BoxManager, parent=None):
         super().__init__(parent)
         self.box_manager = box_manager
         self.setup_ui()
 
-        # Подключаем сигналы менеджера
         self.box_manager.box_added.connect(self.add_box_widget)
         self.box_manager.box_removed.connect(self.remove_box_widget)
 
@@ -522,7 +519,6 @@ class BoxListWidget(QtWidgets.QWidget):
         layout.setContentsMargins(4, 4, 4, 4)
         layout.setSpacing(4)
 
-        # Заголовок со статистикой
         self.header_label = QtWidgets.QLabel("Коробки (0)")
         self.header_label.setStyleSheet("""
             QLabel {

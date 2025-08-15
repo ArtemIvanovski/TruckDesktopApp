@@ -2,6 +2,8 @@ from PyQt5 import QtWidgets, QtCore, QtGui
 
 from graphics_settings import LIGHTING_PRESETS
 
+from setting_deploy import get_resource_path
+
 
 class CameraControlWidget(QtWidgets.QWidget):
     def __init__(self, camera, parent=None):
@@ -593,6 +595,7 @@ class SettingsWindow(QtWidgets.QDialog):
         self.graphics_manager = graphics_manager
         self.search_index = {}
         self.setWindowTitle("Настройки")
+        self.setWindowIcon(QtGui.QIcon(get_resource_path("assets/icon/logo.png")))
         self.setModal(True)
         self.resize(900, 700)
         self.setMinimumSize(800, 600)

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import logging
-
+from setting_deploy import get_resource_path
 from PyQt5 import QtWidgets, QtCore, QtGui
 
 from windows.settings_window import SettingsWindow
@@ -86,6 +86,7 @@ class MainWindow(QtWidgets.QMainWindow):
         super().__init__()
         self.setWindowTitle("GTSTREAM")
         self.setMinimumSize(1000, 700)
+        self.setWindowIcon(QtGui.QIcon(get_resource_path("assets/icon/logo.png")))
 
         from units import UnitsManager
         self.units_manager = UnitsManager()

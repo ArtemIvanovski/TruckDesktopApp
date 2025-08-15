@@ -433,7 +433,6 @@ class LeftSidebar(QtWidgets.QWidget):
         return w
 
     def get_box_manager(self):
-        """Получить менеджер коробок"""
         if hasattr(self, 'box_management'):
             return self.box_management.get_box_manager()
         return None
@@ -450,11 +449,9 @@ class LeftSidebar(QtWidgets.QWidget):
         self._switch_truck(w, h, d)
 
     def _reset_defaults(self):
-        # Default: Тент 16.5 открыт
         self._set_tent_alpha(0.0)
         self._switch_truck(1650, 260, 245)
 
-    # helpers
     def _app3d(self):
         try:
             return self.get_app3d()

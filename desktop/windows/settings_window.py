@@ -793,3 +793,40 @@ class SettingsWindow(QtWidgets.QDialog):
         if 0 <= index < len(self.categories):
             self.title_label.setText(self.categories[index])
             self.content_stack.setCurrentIndex(index)
+
+
+class UnitsWidget(QtWidgets.QWidget):
+    def __init__(self, units_manager, parent=None):
+        super().__init__(parent)
+        self.units_manager = units_manager
+        self.setup_ui()
+
+    def setup_ui(self):
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(30, 30, 30, 30)
+
+        group = QtWidgets.QGroupBox("Единицы измерения")
+        form = QtWidgets.QFormLayout(group)
+
+        self.distance_combo = QtWidgets.QComboBox()
+        for unit, info in self.units_manager.DISTANCE_UNITS.items():
+            self.distance_combo.addItem(info['name'], unit)
+
+        self.weight_combo = QtWidgets.QComboBox()
+        for unit, info in self.units_manager.WEIGHT_UNITS.items():
+            self.weight_combo.addItem(info['name'], unit)
+
+        form.addRow("Расстояние:", self.distance_combo)
+        form.addRow("Вес:", self.weight_combo)
+
+        layout.addWidget(group)
+
+        self.load_current_settings()
+
+    def load_current_settings(self):
+        pass
+
+    def apply_settings(self):
+        distance_unit = self.distance_combo.currentData()
+        weight_unit = self.weight_combo.currentData()
+        self.units_manager.set_units(distance_unit, weight_unit)

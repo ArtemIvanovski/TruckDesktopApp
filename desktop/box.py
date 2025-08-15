@@ -6,90 +6,107 @@ from PyQt5.QtCore import QObject, pyqtSignal
 
 
 class Box(QObject):
+    CARGO_MARKINGS = {
+        'fragile': {'name': 'Хрупкое', 'icon': '🍷', 'symbol': '🔍'},
+        'this_way_up': {'name': 'Верх', 'icon': '⬆️', 'symbol': '↑↑'},
+        'no_stack': {'name': 'Не штабелировать', 'icon': '📦', 'symbol': '⛔'},
+        'keep_dry': {'name': 'Беречь от влаги', 'icon': '☔', 'symbol': '💧'},
+        'center_gravity': {'name': 'Центр тяжести', 'icon': '⚖️', 'symbol': '⊕'},
+        'alcohol': {'name': 'Алкоголь', 'icon': '🍺', 'symbol': '🍷'},
+        'no_hooks': {'name': 'Без крюков', 'icon': '🚫', 'symbol': '⚓'},
+        'temperature': {'name': 'Температурный режим', 'icon': '🌡️', 'symbol': '❄️'}
+    }
+
     changed = pyqtSignal()
 
-    def __init__(self,
-                 width: int,
-                 height: int,
-                 depth: int,
-                 label: str = "",
-                 weight: float = 0.0,
-                 quantity: int = 1,
-                 parent=None):
+    def __init__(self, width, height, depth, label="", weight=0.0, quantity=1,
+                 additional_info="", cargo_markings=None, parent=None):
         super().__init__(parent)
 
-        # Уникальный идентификатор
         self.id = str(uuid.uuid4())
 
-        # Размеры (в см)
         self.width = width
         self.height = height
         self.depth = depth
 
-        # Информация о коробке
         self.label = label if label else f"PO#{self.id[:4]}"
         self.weight = weight  # в кг
         self.quantity = quantity
 
-        # Позиция в 3D пространстве (изначально None - коробка в баре)
         self.position: Optional[Tuple[float, float, float]] = None
 
-        # Состояние коробки
         self.is_in_truck = False
         self.is_rotated = False
         self.truck_index: Optional[int] = None
 
-        # Цвет для отображения (будет генерироваться автоматически)
         self.color: Optional[Tuple[float, float, float]] = None
+        self.additional_info = additional_info
+        self.cargo_markings = cargo_markings or []
 
-        # 3D объект (если коробка размещена на сцене)
         self.mesh_object = None
 
     def get_volume(self) -> float:
-        """Получить объем коробки в кубических см"""
         return self.width * self.height * self.depth
 
+    def get_marking_icons(self):
+        icons = []
+        for marking in self.cargo_markings:
+            if marking in self.CARGO_MARKINGS:
+                icons.append(self.CARGO_MARKINGS[marking]['icon'])
+        return icons
+
+    def get_marking_names(self):
+        names = []
+        for marking in self.cargo_markings:
+            if marking in self.CARGO_MARKINGS:
+                names.append(self.CARGO_MARKINGS[marking]['name'])
+        return names
+
     def get_total_weight(self) -> float:
-        """Получить общий вес всех коробок данного типа"""
         return self.weight * self.quantity
 
     def get_total_volume(self) -> float:
-        """Получить общий объем всех коробок данного типа"""
         return self.get_volume() * self.quantity
 
     def get_dimensions_string(self) -> str:
-        """Получить строку с размерами"""
         return f"{self.width}×{self.height}×{self.depth} см"
 
     def get_info_string(self) -> str:
-        """Получить полную информацию о коробке"""
         lines = [
             f"Маркировка: {self.label}",
             f"Размеры: {self.get_dimensions_string()}",
-            f"Вес: {self.weight} кг",
-            f"Количество: {self.quantity}",
-            f"Общий вес: {self.get_total_weight()} кг",
-            f"Объем: {self.get_volume()} см³"
+            f"Вес: {self.weight:.1f} кг",
+            f"Количество: {self.quantity} шт",
+            f"Общий вес: {self.get_total_weight():.1f} кг",
+            f"Объем: {self.get_volume():,.0f} см³"
         ]
+
+        if self.additional_info:
+            lines.append(f"Информация: {self.additional_info}")
+
+        if self.cargo_markings:
+            marking_names = self.get_marking_names()
+            lines.append(f"Маркировки груза: {', '.join(marking_names)}")
 
         if self.is_in_truck:
             lines.append(f"В грузовике: #{self.truck_index + 1}")
 
         if self.position:
             x, y, z = self.position
-            lines.append(f"Позиция: ({x:.1f}, {y:.1f}, {z:.1f})")
+            lines.append(f"Позиция: ({x:.1f}, {y:.1f}, {z:.1f}) см")
+
+        lines.append(f"ID: {self.id[:8]}")
 
         return "\n".join(lines)
 
     def clone(self) -> 'Box':
-        """Создать копию коробки с новым ID"""
         new_box = Box(
             width=self.width,
             height=self.height,
             depth=self.depth,
             label=self.label,
             weight=self.weight,
-            quantity=1,  # При клонировании количество всегда 1
+            quantity=1,
             parent=self.parent()
         )
         new_box.color = self.color

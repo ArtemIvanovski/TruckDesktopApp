@@ -1,14 +1,14 @@
 {
-  "enable_specular": true,
+  "enable_specular": false,
   "background_color": [
     0.35,
     0.35,
     0.35
   ],
   "truck_color": [
-    0.5333333333333333,
-    0.4,
-    0.0
+    0.3333333333333333,
+    1.0,
+    0.4980392156862745
   ],
   "main_light_intensity": 1.5,
   "fill_light_intensity": 0.8,

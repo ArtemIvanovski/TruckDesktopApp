@@ -87,23 +87,21 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setWindowTitle("GTSTREAM")
         self.setMinimumSize(1000, 700)
 
-        # Создаем основные компоненты
-        self.viewer = PandaWidget(self)
-        self.sidebar = LeftSidebar(lambda: self.viewer.app3d, self)
+        from units import UnitsManager
+        self.units_manager = UnitsManager()
 
-        # Настраиваем центральный виджет
+        self.viewer = PandaWidget(self)
+        self.sidebar = LeftSidebar(lambda: self.viewer.app3d, self.units_manager, self)
+
         self._setup_central_widget()
 
-        # Подключаем события
         self.viewer.ready.connect(self._on_viewer_ready)
         self.sidebar.toggled.connect(self._on_sidebar_toggled)
 
-        # Настраиваем UI
         self.hotkeys = HotkeyController(self)
         self.setup_menu_bar()
-        self.setStatusBar(None)  # Убираем статусбар для более чистого вида
+        self.setStatusBar(None)
 
-        # Применяем стили
         self._apply_styles()
 
     def _setup_central_widget(self):

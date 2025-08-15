@@ -18,7 +18,6 @@ from panda3d.core import (
 
 from camera import ArcCamera
 from config import BACKGROUND_COLOR, LANG, WHEEL_CABIN_HEIGHT
-from i18n import t
 from graphics_settings import GraphicsManager
 from truck import TruckScene
 
@@ -43,7 +42,7 @@ class TruckLoadingApp(ShowBase):
                  embed_parent_window: Optional[int] = None,
                  embed_size: Optional[Tuple[int, int]] = None,
                  enable_direct_gui: bool = True):
-        self.graphics_manager = None  # Заменили lighting_manager на graphics_manager
+        self.graphics_manager = None
         try:
             logger.info("Starting application...")
             if embed_parent_window is not None or window_type == 'none':
@@ -52,8 +51,6 @@ class TruckLoadingApp(ShowBase):
                 ShowBase.__init__(self)
             logger.info("ShowBase initialized")
             self.is_embedded = embed_parent_window is not None or window_type == 'none'
-
-            logger.info("Active language: %s; sample 'exit': %s", LANG, t(LANG, 'exit'))
 
             if embed_parent_window is not None:
                 logger.info("Opening embedded Panda3D window...")
@@ -375,15 +372,12 @@ class TruckLoadingApp(ShowBase):
         self.arc.update()
 
     def shift_down(self):
-        """Нажатие Shift"""
         self.is_shift_down = True
 
     def shift_up(self):
-        """Отпускание Shift"""
         self.is_shift_down = False
 
     def init_first_truck(self):
-        """Инициализация первого грузовика"""
         first_truck = {
             'width': self.truck_width,
             'height': self.truck_height,

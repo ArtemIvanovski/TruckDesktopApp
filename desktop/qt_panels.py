@@ -7,9 +7,10 @@ from box_widgets import BoxManagementWidget
 class LeftSidebar(QtWidgets.QWidget):
     toggled = QtCore.pyqtSignal(bool)
 
-    def __init__(self, get_app3d, parent=None):
+    def __init__(self, get_app3d, units_manager, parent=None):
         super().__init__(parent)
         self.get_app3d = get_app3d
+        self.units_manager = units_manager
         self.setObjectName("LeftSidebar")
         self.active_panel = None
         self._setup_ui()
@@ -419,12 +420,10 @@ class LeftSidebar(QtWidgets.QWidget):
         return w
 
     def _build_boxes_panel(self) -> QtWidgets.QWidget:
-        """Панель управления коробками"""
         w = QtWidgets.QWidget()
         w.setObjectName("BoxesPanel")
 
-        # Используем BoxManagementWidget для управления коробками
-        self.box_management = BoxManagementWidget(w)
+        self.box_management = BoxManagementWidget(self.units_manager, w)
 
         lay = QtWidgets.QVBoxLayout(w)
         lay.setContentsMargins(0, 0, 0, 0)

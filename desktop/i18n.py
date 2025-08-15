@@ -1,37 +1,24 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-from typing import Dict
+# i18n.py
+import json
+import os
 
 
-TRANSLATIONS: Dict[str, Dict[str, str]] = {
-    'ru': {
-        'btn_tent_136': 'тент 13.6',
-        'btn_tent_165': 'тент 16.5',
-        'btn_open': 'открыт',
-        'btn_close': 'закрыт',
-        'btn_ok': 'ок',
-        'exit': 'Выход',
-        'controls_hint': 'ЛКМ — вращать\nПКМ — двигаться вдоль сцены\nКолесо — зум\nEsc — выход',
-        'zone': 'Зона {i}: {w} кг',
-    },
-    'en': {
-        'btn_tent_136': 'tent 13.6',
-        'btn_tent_165': 'tent 16.5',
-        'btn_open': 'open',
-        'btn_close': 'close',
-        'btn_ok': 'ok',
-        'exit': 'Exit',
-        'controls_hint': 'LMB — rotate\nRMB — pan\nWheel — zoom\nEsc — exit',
-        'zone': 'Zone {i}: {w} kg',
-    },
-}
+class Translator:
+    def __init__(self):
+        self.translations = {}
+        self.current_lang = 'ru'
+
+    def load_translations(self, lang):
+        self.current_lang = lang
+        try:
+            with open(f'locales/{lang}.json', 'r', encoding='utf-8') as f:
+                self.translations = json.load(f)
+        except FileNotFoundError:
+            self.translations = {}
+
+    def tr(self, key):
+        return self.translations.get(key, key)
 
 
-def t(lang: str, key: str, **kwargs) -> str:
-    table = TRANSLATIONS.get(lang, TRANSLATIONS['en'])
-    s = table.get(key, key)
-    if kwargs:
-        return s.format(**kwargs)
-    return s
-
-
+translator = Translator()
+translator.load_translations('ru')

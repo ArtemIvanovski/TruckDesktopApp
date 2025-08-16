@@ -100,66 +100,6 @@ class TruckLoadingApp(ShowBase):
             logger.error(traceback.format_exc())
             sys.exit(1)
 
-    def create_3d_box_from_data(self, box_data, world_pos=None):
-        from panda3d.core import (Material, Vec4, GeomNode, Geom, GeomVertexFormat,
-                                  GeomVertexData, GeomVertexWriter, GeomTriangles)
-
-        if world_pos is None:
-            world_pos = (0, 0, 0)
-
-        width = box_data['width'] / 100.0
-        height = box_data['height'] / 100.0
-        depth = box_data['depth'] / 100.0
-
-        box_node = self.render.attachNewNode(f"box_{box_data['id']}")
-
-        vdata = GeomVertexData('box', GeomVertexFormat.get_v3n3(), Geom.UHStatic)
-        vdata.setNumRows(24)
-        vwriter = GeomVertexWriter(vdata, 'vertex')
-        nwriter = GeomVertexWriter(vdata, 'normal')
-
-        self.create_box_geometry(vwriter, nwriter, width, height, depth)
-
-        geom = Geom(vdata)
-        tri = GeomTriangles(Geom.UHStatic)
-
-        for i in range(0, 24, 4):
-            tri.addVertices(i, i + 1, i + 2)
-            tri.addVertices(i, i + 2, i + 3)
-
-        geom.addPrimitive(tri)
-        geom_node = GeomNode('box_geom')
-        geom_node.addGeom(geom)
-
-        box_geom_np = box_node.attachNewNode(geom_node)
-
-        material = Material()
-        if box_data['color']:
-            r, g, b = box_data['color']
-            material.setDiffuse(Vec4(r, g, b, 1.0))
-            material.setSpecular(Vec4(0.2, 0.2, 0.2, 1.0))
-            material.setEmission(Vec4(r * 0.3, g * 0.3, b * 0.3, 1.0))
-        else:
-            material.setDiffuse(Vec4(0.7, 0.7, 0.7, 1.0))
-            material.setSpecular(Vec4(0.2, 0.2, 0.2, 1.0))
-
-        box_geom_np.setMaterial(material)
-
-        self.create_box_wireframe(box_node, width, height, depth)
-        self.create_box_text_labels_babylonjs_style(box_node, box_data, width, height, depth)
-        self.create_box_markings(box_node, box_data, width, height, depth)
-
-        world_x, world_y, world_z = world_pos
-        box_node.setPos(world_x, world_y, world_z + height / 2)
-
-        box_node.box_data = box_data
-
-        if not hasattr(self, 'scene_boxes'):
-            self.scene_boxes = []
-        self.scene_boxes.append(box_node)
-
-        return box_node
-
     def create_box_wireframe(self, box_node, width, height, depth):
         from panda3d.core import LineSegs
 
@@ -190,6 +130,7 @@ class TruckLoadingApp(ShowBase):
         wireframe_np = box_node.attachNewNode(wireframe_node)
         wireframe_np.setRenderModeThickness(2.0)
         wireframe_np.setColor(0, 0, 0, 1)
+        wireframe_np.setLightOff(1)
 
     def create_box_markings(self, box_node, box_data, width, height, depth):
         from panda3d.core import CardMaker, TransparencyAttrib
@@ -231,6 +172,7 @@ class TruckLoadingApp(ShowBase):
                 marking_node.setPos(pos_x, -depth / 2 - 0.005, pos_z)
                 marking_node.setH(0)
                 marking_node.setP(-90)
+                marking_node.setLightOff(1)
 
             except Exception as e:
                 logging.warning(f"Failed to load marking {marking}: {e}")
@@ -385,16 +327,21 @@ class TruckLoadingApp(ShowBase):
 
         box_geom_np.setMaterial(material)
 
-        self.create_box_text_labels(box_node, box_data, width, height, depth)
+        self.create_box_text_labels_babylonjs_style(box_node, box_data, width, height, depth)
 
         world_x, world_y, world_z = world_pos
         box_node.setPos(world_x, world_y, world_z + height / 2)
 
-        box_node.box_data = box_data
+        box_node.setPythonTag('box_data', box_data)
 
         if not hasattr(self, 'scene_boxes'):
             self.scene_boxes = []
         self.scene_boxes.append(box_node)
+
+        box_node.setLightOff(1)
+        box_geom_np.setLightOff(1)
+        self.create_box_wireframe(box_node, width, height, depth)
+        self.create_box_markings(box_node, box_data, width, height, depth)
 
         return box_node
 
@@ -429,34 +376,52 @@ class TruckLoadingApp(ShowBase):
             vwriter.addData3f(*vertex)
             nwriter.addData3f(*normal)
 
-    def create_box_text_labels(self, box_node, box_data, width, height, depth):
-        from panda3d.core import TextNode
+    def create_box_text_labels_babylonjs_style(self, box_node, box_data, width, height, depth):
+        from panda3d.core import TextNode, CardMaker
 
-        text_node = TextNode('label')
-        text_node.setText(box_data['label'])
-        text_node.setAlign(TextNode.ACenter)
-        text_np = box_node.attachNewNode(text_node)
-        text_np.setScale(height * 0.1)
-        text_np.setPos(0, -depth / 2 - 0.01, 0)
-        text_np.setH(0)
-        text_np.setColor(0, 0, 0, 1)
+        main_label_node = TextNode('main_label')
+        main_label_node.setText(box_data['label'])
+        main_label_node.setAlign(TextNode.ACenter)
+        main_label_node.setFont(self.loader.loadFont("fonts/arial.ttf") if hasattr(self, 'loader') else None)
+        main_label_np = box_node.attachNewNode(main_label_node)
+        main_label_np.setScale(height * 0.15)
+        main_label_np.setPos(0, -depth / 2 - 0.01, 0)
+        main_label_np.setColor(0, 0, 0, 1)
+        main_label_np.setBillboardAxis()
 
-        size_text_node = TextNode('dimensions')
-        size_text_node.setText(f"{int(box_data['width'])}x{int(box_data['height'])}x{int(box_data['depth'])}")
-        size_text_node.setAlign(TextNode.ACenter)
-        size_text_np = box_node.attachNewNode(size_text_node)
-        size_text_np.setScale(height * 0.06)
-        size_text_np.setPos(width / 2 + 0.01, 0, height / 4)
-        size_text_np.setH(90)
-        size_text_np.setColor(0, 0, 0, 1)
+        width_label_node = TextNode('width_label')
+        width_label_node.setText(str(int(box_data['width'])))
+        width_label_node.setAlign(TextNode.ACenter)
+        width_label_np = box_node.attachNewNode(width_label_node)
+        width_label_np.setScale(height * 0.08)
+        width_label_np.setPos(0, depth / 2 + 0.02, height / 2 + 0.02)
+        width_label_np.setH(0)
+        width_label_np.setP(90)
+        width_label_np.setColor(0, 0, 0, 1)
 
-        weight_text_node = TextNode('weight')
-        weight_text_node.setText(f"{box_data['weight']}kg")
-        weight_text_node.setAlign(TextNode.ACenter)
-        weight_text_np = box_node.attachNewNode(weight_text_node)
-        weight_text_np.setScale(height * 0.06)
-        weight_text_np.setPos(0, depth / 2 + 0.01, height / 4)
-        weight_text_np.setColor(0, 0, 0, 1)
+        depth_label_node = TextNode('depth_label')
+        depth_label_node.setText(str(int(box_data['depth'])))
+        depth_label_node.setAlign(TextNode.ACenter)
+        depth_label_np = box_node.attachNewNode(depth_label_node)
+        depth_label_np.setScale(height * 0.08)
+        depth_label_np.setPos(width / 2 + 0.02, 0, height / 2 + 0.02)
+        depth_label_np.setH(-90)
+        depth_label_np.setP(90)
+        depth_label_np.setColor(0, 0, 0, 1)
+
+        weight_label_node = TextNode('weight_label')
+        weight_label_node.setText(f"{box_data['weight']}kg")
+        weight_label_node.setAlign(TextNode.ACenter)
+        weight_label_np = box_node.attachNewNode(weight_label_node)
+        weight_label_np.setScale(height * 0.06)
+        weight_label_np.setPos(-width / 2 - 0.01, 0, -height / 4)
+        weight_label_np.setH(90)
+        weight_label_np.setColor(0, 0, 0, 1)
+
+        main_label_np.setLightOff(1)
+        width_label_np.setLightOff(1)
+        depth_label_np.setLightOff(1)
+        weight_label_np.setLightOff(1)
 
     def remove_material_specular(self, model):
         if not model or model.isEmpty():
@@ -604,7 +569,7 @@ class TruckLoadingApp(ShowBase):
         self.arc = ArcCamera(self)
         self.taskMgr.add(self.arc.tick, "camera_update")
 
-    def setup_graphics(self):  # Заменили setup_lighting на setup_graphics
+    def setup_graphics(self):
         self.graphics_manager = GraphicsManager(self)
         self.graphics_manager.setup_lighting()
 
@@ -659,12 +624,12 @@ class TruckLoadingApp(ShowBase):
     def set_lighting_mode(self, mode: str):
         if self.graphics_manager:
             self.graphics_manager.set_lighting_mode(mode)
+
     def setup_controls(self):
         print("Setting up controls...")
-
-        self.accept("mouse1", self.arc.on_left_down)  # Левая для вращения
+        self.accept("mouse1", self.arc.on_left_down)
         self.accept("mouse1-up", self.arc.on_left_up)
-        self.accept("mouse3", self.arc.on_right_down)  # Правая для панорамирования
+        self.accept("mouse3", self.arc.on_right_down)
         self.accept("mouse3-up", self.arc.on_right_up)
         self.accept("wheel_up", self.arc.on_wheel_in)
         self.accept("wheel_down", self.arc.on_wheel_out)
@@ -674,7 +639,7 @@ class TruckLoadingApp(ShowBase):
         print("Controls setup complete")
 
     def focus_on_truck(self):
-        self.arc.target = Point3(0, 0, 200)  # Центр грузовика
+        self.arc.target = Point3(0, 0, 200)
         self.arc.radius = 1500
         self.arc.update()
 

@@ -1,3 +1,5 @@
 panda3d==1.10.13
 panda3d-gltf==0.3.0
 PyQt5==5.15.11
+cairosvg==2.7.1
+pillow==10.0.0

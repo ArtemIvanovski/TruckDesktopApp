@@ -9,6 +9,7 @@ from hotkeys import HotkeyController
 from qt_panels import LeftSidebar
 import sys
 import os
+import json
 
 print(f"Current working directory: {os.getcwd()}")
 print(f"Python path: {sys.path}")
@@ -21,7 +22,6 @@ try:
 except ImportError as e:
     print(f"Import error: {e}")
 
-# Настройка логирования в самом начале
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -34,6 +34,7 @@ class PandaWidget(QtWidgets.QWidget):
         self.setAttribute(QtCore.Qt.WA_NativeWindow)
         self.setAttribute(QtCore.Qt.WA_NoSystemBackground)
         self.setAutoFillBackground(False)
+        self.setAcceptDrops(True)
         self.setMinimumSize(800, 500)
         self.app3d = None
         self.timer = QtCore.QTimer(self)
@@ -60,6 +61,55 @@ class PandaWidget(QtWidgets.QWidget):
             self.ready.emit()
         except Exception as e:
             logging.error(f"[Qt] Failed to init Panda3D: {e}")
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasText():
+            try:
+                json.loads(event.mimeData().text())
+                event.acceptProposedAction()
+            except:
+                event.ignore()
+
+    def dragMoveEvent(self, event):
+        if event.mimeData().hasText():
+            event.acceptProposedAction()
+
+    def dropEvent(self, event):
+        try:
+            box_data = json.loads(event.mimeData().text())
+            if self.app3d:
+                drop_pos = event.pos()
+                screen_x = drop_pos.x() / self.width()
+                screen_y = 1.0 - (drop_pos.y() / self.height())
+
+                world_pos = self.screen_to_world(screen_x, screen_y)
+                self.app3d.create_3d_box_from_data(box_data, world_pos)
+
+            event.acceptProposedAction()
+        except Exception as e:
+            logging.error(f"Error handling drop: {e}")
+            event.ignore()
+
+    def screen_to_world(self, screen_x, screen_y):
+        if not self.app3d or not hasattr(self.app3d, 'render'):
+            return (0, 0, 0)
+
+        from panda3d.core import CollisionRay, CollisionNode, CollisionTraverser, CollisionHandlerQueue
+
+        ray = CollisionRay()
+        ray.setFromLens(self.app3d.camNode, screen_x * 2 - 1, screen_y * 2 - 1)
+
+        ground_z = 0
+        ray_dir = ray.getDirection()
+        ray_origin = ray.getOrigin()
+
+        if ray_dir.z != 0:
+            t = (ground_z - ray_origin.z) / ray_dir.z
+            world_x = ray_origin.x + t * ray_dir.x
+            world_y = ray_origin.y + t * ray_dir.y
+            return (world_x, world_y, ground_z)
+
+        return (0, 0, 0)
 
     def _step(self):
         try:

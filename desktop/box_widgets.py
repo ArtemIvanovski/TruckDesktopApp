@@ -2,6 +2,9 @@ import random
 from PyQt5 import QtWidgets, QtCore, QtGui
 from PyQt5.QtCore import pyqtSignal
 from box import Box, BoxManager
+import json
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QDrag
 
 
 class BoxCreationWidget(QtWidgets.QWidget):
@@ -174,7 +177,7 @@ class BoxCreationWidget(QtWidgets.QWidget):
             self.marking_checkboxes[key] = checkbox
             markings_grid.addWidget(checkbox, row, col)
             col += 1
-            if col > 2:  # 3 колонки
+            if col > 2:
                 col = 0
                 row += 1
 
@@ -444,6 +447,63 @@ class Box2DWidget(QtWidgets.QWidget):
         """)
         super().leaveEvent(event)
 
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.drag_start_position = event.pos()
+
+    def mouseMoveEvent(self, event):
+        if not (event.buttons() & Qt.LeftButton):
+            return
+
+        if not hasattr(self, 'drag_start_position'):
+            return
+
+        if ((event.pos() - self.drag_start_position).manhattanLength() <
+                QtWidgets.QApplication.startDragDistance()):
+            return
+
+        self.start_drag()
+
+    def start_drag(self):
+        drag = QDrag(self)
+        mimeData = QtCore.QMimeData()
+
+        box_data = {
+            'id': self.box.id,
+            'width': self.box.width,
+            'height': self.box.height,
+            'depth': self.box.depth,
+            'label': self.box.label,
+            'weight': self.box.weight,
+            'quantity': self.box.quantity,
+            'color': self.box.color,
+            'additional_info': self.box.additional_info,
+            'cargo_markings': self.box.cargo_markings
+        }
+
+        mimeData.setText(json.dumps(box_data))
+        drag.setMimeData(mimeData)
+
+        pixmap = self.grab()
+        drag.setPixmap(pixmap)
+        drag.setHotSpot(pixmap.rect().center())
+
+        dropAction = drag.exec_(Qt.MoveAction)
+
+        if dropAction == Qt.MoveAction:
+            self.handle_successful_drag()
+
+    def handle_successful_drag(self):
+        if self.box.quantity > 1:
+            self.box.quantity -= 1
+            self.box.changed.emit()
+        else:
+            parent = self.parent()
+            while parent and not hasattr(parent, 'box_manager'):
+                parent = parent.parent()
+            if parent:
+                parent.box_manager.remove_box(self.box)
+
 
 class BoxRectWidget(QtWidgets.QWidget):
     def __init__(self, box: Box, parent=None):
@@ -462,20 +522,16 @@ class BoxRectWidget(QtWidgets.QWidget):
         else:
             color = QtGui.QColor(100, 150, 200)
 
-        # Рисуем прямоугольник коробки
         rect = self.rect().adjusted(2, 2, -2, -2)
 
-        # Заливка
         brush = QtGui.QBrush(color)
         painter.setBrush(brush)
 
-        # Контур
         pen = QtGui.QPen(color.darker(150), 2)
         painter.setPen(pen)
 
         painter.drawRoundedRect(rect, 4, 4)
 
-        # Рисуем размеры внутри прямоугольника
         painter.setPen(QtGui.QPen(QtCore.Qt.white if color.lightness() < 128 else QtCore.Qt.black))
         font = painter.font()
         font.setPointSize(4)
@@ -486,7 +542,6 @@ class BoxRectWidget(QtWidgets.QWidget):
         h = self.box.height
         d = self.box.depth
 
-        # Отображаем размеры как ширина×высота
         size_text = f"{w}×{h}"
         painter.drawText(rect, QtCore.Qt.AlignCenter, size_text)
 
@@ -497,9 +552,8 @@ class BoxRectWidget(QtWidgets.QWidget):
             painter.setFont(font)
             painter.setPen(QtGui.QPen(QtCore.Qt.black))
 
-            # Отображаем иконки в ряд
             icon_x = rect.right() - 18
-            for icon in marking_icons[:3]:  # максимум 3 иконки
+            for icon in marking_icons[:3]:
                 icon_rect = QtCore.QRect(icon_x, rect.top() + 2, 16, 16)
                 painter.drawText(icon_rect, QtCore.Qt.AlignCenter, icon)
                 icon_x -= 16
@@ -532,7 +586,6 @@ class BoxListWidget(QtWidgets.QWidget):
         """)
         layout.addWidget(self.header_label)
 
-        # Скролл область для коробок
         scroll = QtWidgets.QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QtWidgets.QFrame.NoFrame)
@@ -548,7 +601,6 @@ class BoxListWidget(QtWidgets.QWidget):
         scroll.setWidget(self.boxes_container)
         layout.addWidget(scroll)
 
-        # Кнопки управления
         buttons_layout = QtWidgets.QHBoxLayout()
 
         clear_button = QtWidgets.QPushButton("Очистить все")
@@ -571,17 +623,11 @@ class BoxListWidget(QtWidgets.QWidget):
         layout.addLayout(buttons_layout)
 
     def add_box_widget(self, box: Box):
-        """Добавить виджет коробки в список"""
         box_widget = Box2DWidget(box, self)
-
-        # Добавляем перед stretch
         self.boxes_layout.insertWidget(self.boxes_layout.count() - 1, box_widget)
-
         self.update_header()
 
     def remove_box_widget(self, box: Box):
-        """Удалить виджет коробки из списка"""
-        # Находим и удаляем соответствующий виджет
         for i in range(self.boxes_layout.count()):
             item = self.boxes_layout.itemAt(i)
             if item and item.widget():
@@ -593,7 +639,6 @@ class BoxListWidget(QtWidgets.QWidget):
         self.update_header()
 
     def update_header(self):
-        """Обновить заголовок со статистикой"""
         boxes = self.box_manager.get_boxes_in_bar()
         count = len(boxes)
         total_weight = sum(box.get_total_weight() for box in boxes)
@@ -611,14 +656,13 @@ class BoxListWidget(QtWidgets.QWidget):
         )
 
         if reply == QtWidgets.QMessageBox.Yes:
-            # Удалить все виджеты из layout
-            while self.boxes_layout.count() > 1:  # оставляем stretch
+            while self.boxes_layout.count() > 1:
                 item = self.boxes_layout.takeAt(0)
                 if item and item.widget():
                     item.widget().deleteLater()
 
             self.box_manager.clear_all()
-            self.update_header()  # добавить эту строку
+            self.update_header()
 
 
 class BoxManagementWidget(QtWidgets.QWidget):

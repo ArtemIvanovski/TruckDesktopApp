@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 import logging
 import math
 import os
@@ -7,17 +5,15 @@ import sys
 import traceback
 from typing import Optional, Tuple
 
-from direct.gui.DirectGui import *
 from direct.showbase.ShowBase import ShowBase
-from panda3d.core import Filename, Material, Point3
+from panda3d.core import Material, Point3
 from panda3d.core import (
     WindowProperties,
     AntialiasAttrib,
-    TextNode,
 )
 
 from camera import ArcCamera
-from config import BACKGROUND_COLOR, LANG, WHEEL_CABIN_HEIGHT
+from config import BACKGROUND_COLOR, WHEEL_CABIN_HEIGHT
 from graphics_settings import GraphicsManager
 from truck import TruckScene
 
@@ -104,6 +100,210 @@ class TruckLoadingApp(ShowBase):
             logger.error(traceback.format_exc())
             sys.exit(1)
 
+    def create_3d_box_from_data(self, box_data, world_pos=None):
+        from panda3d.core import (Material, Vec4, GeomNode, Geom, GeomVertexFormat,
+                                  GeomVertexData, GeomVertexWriter, GeomTriangles)
+
+        if world_pos is None:
+            world_pos = (0, 0, 0)
+
+        width = box_data['width'] / 100.0
+        height = box_data['height'] / 100.0
+        depth = box_data['depth'] / 100.0
+
+        box_node = self.render.attachNewNode(f"box_{box_data['id']}")
+
+        vdata = GeomVertexData('box', GeomVertexFormat.get_v3n3(), Geom.UHStatic)
+        vdata.setNumRows(24)
+        vwriter = GeomVertexWriter(vdata, 'vertex')
+        nwriter = GeomVertexWriter(vdata, 'normal')
+
+        self.create_box_geometry(vwriter, nwriter, width, height, depth)
+
+        geom = Geom(vdata)
+        tri = GeomTriangles(Geom.UHStatic)
+
+        for i in range(0, 24, 4):
+            tri.addVertices(i, i + 1, i + 2)
+            tri.addVertices(i, i + 2, i + 3)
+
+        geom.addPrimitive(tri)
+        geom_node = GeomNode('box_geom')
+        geom_node.addGeom(geom)
+
+        box_geom_np = box_node.attachNewNode(geom_node)
+
+        material = Material()
+        if box_data['color']:
+            r, g, b = box_data['color']
+            material.setDiffuse(Vec4(r, g, b, 1.0))
+            material.setSpecular(Vec4(0.2, 0.2, 0.2, 1.0))
+            material.setEmission(Vec4(r * 0.3, g * 0.3, b * 0.3, 1.0))
+        else:
+            material.setDiffuse(Vec4(0.7, 0.7, 0.7, 1.0))
+            material.setSpecular(Vec4(0.2, 0.2, 0.2, 1.0))
+
+        box_geom_np.setMaterial(material)
+
+        self.create_box_wireframe(box_node, width, height, depth)
+        self.create_box_text_labels_babylonjs_style(box_node, box_data, width, height, depth)
+        self.create_box_markings(box_node, box_data, width, height, depth)
+
+        world_x, world_y, world_z = world_pos
+        box_node.setPos(world_x, world_y, world_z + height / 2)
+
+        box_node.box_data = box_data
+
+        if not hasattr(self, 'scene_boxes'):
+            self.scene_boxes = []
+        self.scene_boxes.append(box_node)
+
+        return box_node
+
+    def create_box_wireframe(self, box_node, width, height, depth):
+        from panda3d.core import LineSegs
+
+        w, h, d = width / 2, height / 2, depth / 2
+
+        lines = LineSegs()
+        lines.setThickness(2.0)
+        lines.setColor(0, 0, 0, 1)
+
+        vertices = [
+            (-w, -d, -h), (w, -d, -h), (w, d, -h), (-w, d, -h),
+            (-w, -d, h), (w, -d, h), (w, d, h), (-w, d, h)
+        ]
+
+        edges = [
+            (0, 1), (1, 2), (2, 3), (3, 0),
+            (4, 5), (5, 6), (6, 7), (7, 4),
+            (0, 4), (1, 5), (2, 6), (3, 7)
+        ]
+
+        for start_idx, end_idx in edges:
+            start_pos = vertices[start_idx]
+            end_pos = vertices[end_idx]
+            lines.moveTo(*start_pos)
+            lines.drawTo(*end_pos)
+
+        wireframe_node = lines.create()
+        wireframe_np = box_node.attachNewNode(wireframe_node)
+        wireframe_np.setRenderModeThickness(2.0)
+        wireframe_np.setColor(0, 0, 0, 1)
+
+    def create_box_markings(self, box_node, box_data, width, height, depth):
+        from panda3d.core import CardMaker, TransparencyAttrib
+        import os
+        from setting_deploy import get_resource_path
+
+        markings = box_data.get('cargo_markings', [])
+        if not markings:
+            return
+
+        marking_size = min(width, height, depth) * 0.15
+        markings_per_row = 3
+        start_x = width / 2 - (markings_per_row * marking_size) / 2
+
+        for i, marking in enumerate(markings[:6]):
+            svg_path = get_resource_path(f"assets/markings/{marking}.svg")
+
+            if not os.path.exists(svg_path):
+                continue
+
+            try:
+                texture = self.convert_svg_to_texture(svg_path, 64, 64)
+                if not texture:
+                    continue
+
+                cm = CardMaker(f'marking_{marking}_{i}')
+                cm.setFrame(-marking_size / 2, marking_size / 2, -marking_size / 2, marking_size / 2)
+
+                marking_node = box_node.attachNewNode(cm.generate())
+                marking_node.setTexture(texture)
+                marking_node.setTransparency(TransparencyAttrib.MAlpha)
+
+                row = i // markings_per_row
+                col = i % markings_per_row
+
+                pos_x = start_x + col * marking_size
+                pos_z = height / 2 + 0.005 - row * marking_size
+
+                marking_node.setPos(pos_x, -depth / 2 - 0.005, pos_z)
+                marking_node.setH(0)
+                marking_node.setP(-90)
+
+            except Exception as e:
+                logging.warning(f"Failed to load marking {marking}: {e}")
+
+    def convert_svg_to_texture(self, svg_path, width, height):
+        from panda3d.core import Texture, PNMImage
+        import os
+
+        try:
+            try:
+                import cairosvg
+                from PIL import Image
+                import io
+
+                png_data = cairosvg.svg2png(url=svg_path, output_width=width, output_height=height)
+
+                pil_image = Image.open(io.BytesIO(png_data))
+                if pil_image.mode != 'RGBA':
+                    pil_image = pil_image.convert('RGBA')
+
+                pnm_image = PNMImage(width, height, 4)
+
+                for y in range(height):
+                    for x in range(width):
+                        r, g, b, a = pil_image.getpixel((x, y))
+                        pnm_image.setXelA(x, y, r / 255.0, g / 255.0, b / 255.0, a / 255.0)
+
+                texture = Texture()
+                texture.load(pnm_image)
+                texture.setFormat(Texture.FRgba)
+                return texture
+
+            except ImportError:
+                logging.warning("cairosvg not available, trying rsvg-convert")
+
+                png_path = svg_path.replace('.svg', 'logo.png')
+                os.system(f'rsvg-convert -w {width} -h {height} "{svg_path}" -o "{png_path}"')
+
+                if os.path.exists(png_path):
+                    texture = self.loader.loadTexture(png_path)
+                    os.remove(png_path)
+                    return texture
+
+        except Exception as e:
+            logging.warning(f"Failed to convert SVG {svg_path}: {e}")
+
+        return self.create_fallback_marking_texture(os.path.basename(svg_path).replace('.svg', ''))
+
+    def create_fallback_marking_texture(self, marking_name):
+        from panda3d.core import Texture, PNMImage
+
+        marking_symbols = {
+            'fragile': '🍷',
+            'this_way_up': '⬆️',
+            'no_stack': '⛔',
+            'keep_dry': '☔',
+            'center_gravity': '⊕',
+            'alcohol': '🍺',
+            'no_hooks': '🚫',
+            'temperature': '🌡️'
+        }
+
+        symbol = marking_symbols.get(marking_name, '?')
+
+        pnm_image = PNMImage(64, 64, 4)
+        pnm_image.fill(1.0, 1.0, 1.0)
+
+        texture = Texture()
+        texture.load(pnm_image)
+        texture.setFormat(Texture.FRgba)
+
+        return texture
+
     def _setup_window_standalone(self):
         self.windowType = 'onscreen'
         props = WindowProperties()
@@ -142,11 +342,125 @@ class TruckLoadingApp(ShowBase):
             props.setSize(int(width), int(height))
             self.win.requestProperties(props)
 
+    def create_3d_box_from_data(self, box_data, world_pos=None):
+        from panda3d.core import (CardMaker, Material, Vec4, GeomNode, Geom, GeomVertexFormat,
+                                  GeomVertexData, GeomVertexWriter, GeomTriangles, TextNode)
+
+        if world_pos is None:
+            world_pos = (0, 0, 0)
+
+        width = box_data['width'] / 100.0
+        height = box_data['height'] / 100.0
+        depth = box_data['depth'] / 100.0
+
+        box_node = self.render.attachNewNode(f"box_{box_data['id']}")
+
+        vdata = GeomVertexData('box', GeomVertexFormat.get_v3n3(), Geom.UHStatic)
+        vdata.setNumRows(24)
+        vwriter = GeomVertexWriter(vdata, 'vertex')
+        nwriter = GeomVertexWriter(vdata, 'normal')
+
+        self.create_box_geometry(vwriter, nwriter, width, height, depth)
+
+        geom = Geom(vdata)
+        tri = GeomTriangles(Geom.UHStatic)
+
+        for i in range(0, 24, 4):
+            tri.addVertices(i, i + 1, i + 2)
+            tri.addVertices(i, i + 2, i + 3)
+
+        geom.addPrimitive(tri)
+        geom_node = GeomNode('box_geom')
+        geom_node.addGeom(geom)
+
+        box_geom_np = box_node.attachNewNode(geom_node)
+
+        material = Material()
+        if box_data['color']:
+            r, g, b = box_data['color']
+            material.setDiffuse(Vec4(r, g, b, 1.0))
+            material.setSpecular(Vec4(0.1, 0.1, 0.1, 1.0))
+        else:
+            material.setDiffuse(Vec4(0.7, 0.7, 0.7, 1.0))
+
+        box_geom_np.setMaterial(material)
+
+        self.create_box_text_labels(box_node, box_data, width, height, depth)
+
+        world_x, world_y, world_z = world_pos
+        box_node.setPos(world_x, world_y, world_z + height / 2)
+
+        box_node.box_data = box_data
+
+        if not hasattr(self, 'scene_boxes'):
+            self.scene_boxes = []
+        self.scene_boxes.append(box_node)
+
+        return box_node
+
+    def create_box_geometry(self, vwriter, nwriter, width, height, depth):
+        w, h, d = width / 2, height / 2, depth / 2
+
+        vertices = [
+            # Front face
+            (-w, -d, -h), (w, -d, -h), (w, -d, h), (-w, -d, h),
+            # Back face
+            (w, d, -h), (-w, d, -h), (-w, d, h), (w, d, h),
+            # Left face
+            (-w, d, -h), (-w, -d, -h), (-w, -d, h), (-w, d, h),
+            # Right face
+            (w, -d, -h), (w, d, -h), (w, d, h), (w, -d, h),
+            # Top face
+            (-w, -d, h), (w, -d, h), (w, d, h), (-w, d, h),
+            # Bottom face
+            (-w, d, -h), (w, d, -h), (w, -d, -h), (-w, -d, -h)
+        ]
+
+        normals = [
+            (0, -1, 0), (0, -1, 0), (0, -1, 0), (0, -1, 0),
+            (0, 1, 0), (0, 1, 0), (0, 1, 0), (0, 1, 0),
+            (-1, 0, 0), (-1, 0, 0), (-1, 0, 0), (-1, 0, 0),
+            (1, 0, 0), (1, 0, 0), (1, 0, 0), (1, 0, 0),
+            (0, 0, 1), (0, 0, 1), (0, 0, 1), (0, 0, 1),
+            (0, 0, -1), (0, 0, -1), (0, 0, -1), (0, 0, -1)
+        ]
+
+        for i, (vertex, normal) in enumerate(zip(vertices, normals)):
+            vwriter.addData3f(*vertex)
+            nwriter.addData3f(*normal)
+
+    def create_box_text_labels(self, box_node, box_data, width, height, depth):
+        from panda3d.core import TextNode
+
+        text_node = TextNode('label')
+        text_node.setText(box_data['label'])
+        text_node.setAlign(TextNode.ACenter)
+        text_np = box_node.attachNewNode(text_node)
+        text_np.setScale(height * 0.1)
+        text_np.setPos(0, -depth / 2 - 0.01, 0)
+        text_np.setH(0)
+        text_np.setColor(0, 0, 0, 1)
+
+        size_text_node = TextNode('dimensions')
+        size_text_node.setText(f"{int(box_data['width'])}x{int(box_data['height'])}x{int(box_data['depth'])}")
+        size_text_node.setAlign(TextNode.ACenter)
+        size_text_np = box_node.attachNewNode(size_text_node)
+        size_text_np.setScale(height * 0.06)
+        size_text_np.setPos(width / 2 + 0.01, 0, height / 4)
+        size_text_np.setH(90)
+        size_text_np.setColor(0, 0, 0, 1)
+
+        weight_text_node = TextNode('weight')
+        weight_text_node.setText(f"{box_data['weight']}kg")
+        weight_text_node.setAlign(TextNode.ACenter)
+        weight_text_np = box_node.attachNewNode(weight_text_node)
+        weight_text_np.setScale(height * 0.06)
+        weight_text_np.setPos(0, depth / 2 + 0.01, height / 4)
+        weight_text_np.setColor(0, 0, 0, 1)
+
     def remove_material_specular(self, model):
         if not model or model.isEmpty():
             return
-
-        from panda3d.core import Vec4
 
         if self.graphics_manager:
             enabled = self.graphics_manager.settings.enable_specular

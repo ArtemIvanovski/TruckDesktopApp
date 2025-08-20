@@ -24,5 +24,10 @@ if __name__ == "__main__":
     qt_app = QtWidgets.QApplication(sys.argv)
     _load_qt_fonts()
     win = MainWindow()
-    win.showMaximized()
+    screen = qt_app.primaryScreen()
+    if screen:
+        screen_geometry = screen.availableGeometry()
+        win.resize(screen_geometry.width(), screen_geometry.height())
+        win.move(screen_geometry.x(), screen_geometry.y())
+    win.show()
     sys.exit(qt_app.exec_())

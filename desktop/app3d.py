@@ -6,7 +6,7 @@ import traceback
 from typing import Optional, Tuple
 
 from direct.showbase.ShowBase import ShowBase
-from panda3d.core import Material, Point3
+from panda3d.core import Material, Point3, TextNode
 from panda3d.core import (
     WindowProperties,
     AntialiasAttrib,
@@ -106,7 +106,7 @@ class TruckLoadingApp(ShowBase):
         w, h, d = width / 2, height / 2, depth / 2
 
         lines = LineSegs()
-        lines.setThickness(2.0)
+        lines.setThickness(1.0)
         lines.setColor(0, 0, 0, 1)
 
         vertices = [
@@ -131,6 +131,7 @@ class TruckLoadingApp(ShowBase):
         wireframe_np.setRenderModeThickness(2.0)
         wireframe_np.setColor(0, 0, 0, 1)
         wireframe_np.setLightOff(1)
+        wireframe_np.setDepthOffset(2)
 
     def create_box_markings(self, box_node, box_data, width, height, depth):
         from panda3d.core import CardMaker, TransparencyAttrib
@@ -141,9 +142,9 @@ class TruckLoadingApp(ShowBase):
         if not markings:
             return
 
-        marking_size = min(width, height, depth) * 0.15
-        markings_per_row = 3
-        start_x = width / 2 - (markings_per_row * marking_size) / 2
+        marking_size = min(width, height, depth) * 0.25  # Увеличиваем размер маркировок
+        markings_per_row = 2  # Уменьшаем количество в ряду для лучшей видимости
+        start_x = -marking_size / 2  # Центрируем по X
 
         for i, marking in enumerate(markings[:6]):
             svg_path = get_resource_path(f"assets/markings/{marking}.svg")
@@ -166,79 +167,65 @@ class TruckLoadingApp(ShowBase):
                 row = i // markings_per_row
                 col = i % markings_per_row
 
-                pos_x = start_x + col * marking_size
-                pos_z = height / 2 + 0.005 - row * marking_size
+                pos_x = start_x + col * marking_size * 1.2  # Больше расстояние между маркировками
+                pos_z = height / 2 - 0.1 - row * marking_size * 1.2  # На верхней грани
 
-                marking_node.setPos(pos_x, -depth / 2 - 0.005, pos_z)
+                marking_node.setPos(pos_x, -depth / 2 - 0.01, pos_z)
                 marking_node.setH(0)
                 marking_node.setP(-90)
                 marking_node.setLightOff(1)
+                marking_node.setDepthOffset(2)  # Поверх коробки
 
             except Exception as e:
                 logging.warning(f"Failed to load marking {marking}: {e}")
 
     def convert_svg_to_texture(self, svg_path, width, height):
-        from panda3d.core import Texture, PNMImage
-        import os
-
-        try:
-            try:
-                import cairosvg
-                from PIL import Image
-                import io
-
-                png_data = cairosvg.svg2png(url=svg_path, output_width=width, output_height=height)
-
-                pil_image = Image.open(io.BytesIO(png_data))
-                if pil_image.mode != 'RGBA':
-                    pil_image = pil_image.convert('RGBA')
-
-                pnm_image = PNMImage(width, height, 4)
-
-                for y in range(height):
-                    for x in range(width):
-                        r, g, b, a = pil_image.getpixel((x, y))
-                        pnm_image.setXelA(x, y, r / 255.0, g / 255.0, b / 255.0, a / 255.0)
-
-                texture = Texture()
-                texture.load(pnm_image)
-                texture.setFormat(Texture.FRgba)
-                return texture
-
-            except ImportError:
-                logging.warning("cairosvg not available, trying rsvg-convert")
-
-                png_path = svg_path.replace('.svg', 'logo.png')
-                os.system(f'rsvg-convert -w {width} -h {height} "{svg_path}" -o "{png_path}"')
-
-                if os.path.exists(png_path):
-                    texture = self.loader.loadTexture(png_path)
-                    os.remove(png_path)
-                    return texture
-
-        except Exception as e:
-            logging.warning(f"Failed to convert SVG {svg_path}: {e}")
-
-        return self.create_fallback_marking_texture(os.path.basename(svg_path).replace('.svg', ''))
+        """Создание текстуры из SVG файла с fallback на простые символы"""
+        # Сразу используем fallback текстуры для избежания проблем с cairo
+        marking_name = os.path.basename(svg_path).replace('.svg', '')
+        logging.info(f"Creating fallback texture for marking: {marking_name}")
+        return self.create_fallback_marking_texture(marking_name)
 
     def create_fallback_marking_texture(self, marking_name):
-        from panda3d.core import Texture, PNMImage
+        from panda3d.core import Texture, PNMImage, LColor
 
-        marking_symbols = {
-            'fragile': '🍷',
-            'this_way_up': '⬆️',
-            'no_stack': '⛔',
-            'keep_dry': '☔',
-            'center_gravity': '⊕',
-            'alcohol': '🍺',
-            'no_hooks': '🚫',
-            'temperature': '🌡️'
+        # Создаем простые цветные текстуры для маркировок
+        marking_colors = {
+            'fragile': (1.0, 0.0, 0.0),  # красный
+            'this_way_up': (0.0, 1.0, 0.0),  # зеленый
+            'no_stack': (1.0, 1.0, 0.0),  # желтый
+            'keep_dry': (0.0, 0.0, 1.0),  # синий
+            'center_gravity': (1.0, 0.5, 0.0),  # оранжевый
+            'alcohol': (0.5, 0.0, 1.0),  # фиолетовый
+            'no_hooks': (1.0, 0.0, 1.0),  # пурпурный
+            'temperature': (0.0, 1.0, 1.0)  # циан
         }
 
-        symbol = marking_symbols.get(marking_name, '?')
+        color = marking_colors.get(marking_name, (0.5, 0.5, 0.5))
+        r, g, b = color
 
+        # Создаем изображение с цветным кругом
         pnm_image = PNMImage(64, 64, 4)
-        pnm_image.fill(1.0, 1.0, 1.0)
+        pnm_image.fill(0.0, 0.0, 0.0, 0.0)  # прозрачный фон
+
+        # Рисуем цветной круг
+        center_x, center_y = 32, 32
+        radius = 25
+        
+        for y in range(64):
+            for x in range(64):
+                dx = x - center_x
+                dy = y - center_y
+                distance = (dx * dx + dy * dy) ** 0.5
+                
+                if distance <= radius:
+                    # Внутри круга - устанавливаем цвет маркировки
+                    pnm_image.setXel(x, y, LColor(r, g, b))
+                    pnm_image.setAlpha(x, y, 1.0)
+                elif distance <= radius + 2:
+                    # Граница круга - черная обводка
+                    pnm_image.setXel(x, y, LColor(0, 0, 0))
+                    pnm_image.setAlpha(x, y, 1.0)
 
         texture = Texture()
         texture.load(pnm_image)
@@ -285,18 +272,32 @@ class TruckLoadingApp(ShowBase):
             self.win.requestProperties(props)
 
     def create_3d_box_from_data(self, box_data, world_pos=None):
+        """Создание 3D коробки точно как в content.html"""
         from panda3d.core import (CardMaker, Material, Vec4, GeomNode, Geom, GeomVertexFormat,
                                   GeomVertexData, GeomVertexWriter, GeomTriangles, TextNode)
+        import random
 
         if world_pos is None:
             world_pos = (0, 0, 0)
 
-        width = box_data['width'] / 100.0
-        height = box_data['height'] / 100.0
-        depth = box_data['depth'] / 100.0
+        width = box_data['width']
+        height = box_data['height']
+        depth = box_data['depth']
+        label = box_data.get('label', f'PO#{len(getattr(self, "scene_boxes", []))}')
+        weight = box_data.get('weight', 1.0)
 
-        box_node = self.render.attachNewNode(f"box_{box_data['id']}")
+        # Создаем узел коробки как в content.html (randomBox[mCyrcle])
+        box_id = len(getattr(self, "scene_boxes", []))
+        box_node = self.render.attachNewNode(f"randomBox{box_id}")
+        
+        # Теги как в content.html
+        box_node.setPythonTag('box_id', box_id)
+        box_node.setPythonTag('truck_index', None)
+        box_node.setPythonTag('is_shift', False)
+        box_node.setPythonTag('is_rotated', False)
+        box_node.setPythonTag('weight', weight)
 
+        # Создаем геометрию коробки
         vdata = GeomVertexData('box', GeomVertexFormat.get_v3n3(), Geom.UHStatic)
         vdata.setNumRows(24)
         vwriter = GeomVertexWriter(vdata, 'vertex')
@@ -317,32 +318,60 @@ class TruckLoadingApp(ShowBase):
 
         box_geom_np = box_node.attachNewNode(geom_node)
 
+        # Система цветов как в content.html (boxColors Map)
+        box_color_key = f"{width}_{depth}_{height}"
+        if not hasattr(self, 'box_colors'):
+            self.box_colors = {}
+            
+        if box_color_key not in self.box_colors:
+            # Генерируем цвет как в content.html: new BABYLON.Color3(Math.random(), Math.random(), Math.random())
+            self.box_colors[box_color_key] = (random.random(), random.random(), random.random())
+        
+        box_color = self.box_colors[box_color_key]
+        r, g, b = box_color
+        
+        # Материал как в content.html - правильно применяем цвет коробки
         material = Material()
-        if box_data['color']:
-            r, g, b = box_data['color']
-            material.setDiffuse(Vec4(r, g, b, 1.0))
-            material.setSpecular(Vec4(0.1, 0.1, 0.1, 1.0))
-        else:
-            material.setDiffuse(Vec4(0.7, 0.7, 0.7, 1.0))
-
+        material.setDiffuse(Vec4(r, g, b, 1.0))  # Основной цвет коробки
+        material.setSpecular(Vec4(0.3, 0.3, 0.3, 1.0))  # Небольшие блики
+        material.setEmission(Vec4(0.1, 0.1, 0.1, 1.0))  # Слабое свечение
+        material.setShininess(32)
+        
         box_geom_np.setMaterial(material)
+        # Включаем освещение для правильного отображения цвета
+        box_geom_np.setRenderModeWireframe()
+        box_geom_np.clearRenderMode()
+        box_geom_np.setColorScale(1, 1, 1, 1)
 
-        self.create_box_text_labels_babylonjs_style(box_node, box_data, width, height, depth)
+        # Окантовка как в content.html: enableEdgesRendering()
+        self.create_box_wireframe(box_node, width, height, depth)
+        
+        # Создаем надписи как в content.html
+        self.create_box_text_labels_static(box_node, box_data, width, height, depth)
 
+        # Добавляем коллизионное тело для возможности выделения мышью
+        from panda3d.core import CollisionNode, CollisionBox
+        collision_node = CollisionNode('box_collision')
+        collision_node.addSolid(CollisionBox(Point3(0, 0, 0), width/2, depth/2, height/2))
+        collision_node.setFromCollideMask(0)
+        collision_node.setIntoCollideMask(1)
+        collision_np = box_geom_np.attachNewNode(collision_node)
+
+        # Позиционирование
         world_x, world_y, world_z = world_pos
         box_node.setPos(world_x, world_y, world_z + height / 2)
 
         box_node.setPythonTag('box_data', box_data)
 
+        # Добавляем в список коробок как в content.html
         if not hasattr(self, 'scene_boxes'):
             self.scene_boxes = []
         self.scene_boxes.append(box_node)
 
-        box_node.setLightOff(1)
-        box_geom_np.setLightOff(1)
-        self.create_box_wireframe(box_node, width, height, depth)
-        self.create_box_markings(box_node, box_data, width, height, depth)
-
+        # Маркировки груза
+        self.create_box_markings(box_node=box_node, box_data=box_data, width=width, height=height, depth=depth)
+        
+        print(f"Box created: {label}, size: {width}x{height}x{depth}, weight: {weight}kg, color: {box_color}")
         return box_node
 
     def create_box_geometry(self, vwriter, nwriter, width, height, depth):
@@ -376,52 +405,95 @@ class TruckLoadingApp(ShowBase):
             vwriter.addData3f(*vertex)
             nwriter.addData3f(*normal)
 
-    def create_box_text_labels_babylonjs_style(self, box_node, box_data, width, height, depth):
-        from panda3d.core import TextNode, CardMaker
-
+    def create_box_text_labels_static(self, box_node, box_data, width, height, depth):
+        """Создание надписей на коробке точно как в content.html"""
+        
+        # Загружаем шрифт с поддержкой русских символов
+        try:
+            from panda3d.core import DynamicTextFont
+            font_path = os.path.join(os.path.dirname(__file__), 'fonts', 'NotoSans-Regular.ttf')
+            # Конвертируем Windows путь в Unix стиль для Panda3D
+            font_path_unix = font_path.replace('\\', '/')
+            if os.path.exists(font_path):
+                font = self.loader.loadFont(font_path_unix)
+                if font:
+                    logging.info(f"Loaded font: {font_path_unix}")
+                else:
+                    font = None
+            else:
+                font = None
+        except Exception as e:
+            logging.warning(f"Error loading font: {e}")
+            font = None
+        
+        # Основная метка (название коробки) - на передней стенке как в content.html
         main_label_node = TextNode('main_label')
         main_label_node.setText(box_data['label'])
         main_label_node.setAlign(TextNode.ACenter)
-        main_label_node.setFont(self.loader.loadFont("fonts/arial.ttf") if hasattr(self, 'loader') else None)
+        if font:
+            main_label_node.setFont(font)
         main_label_np = box_node.attachNewNode(main_label_node)
-        main_label_np.setScale(height * 0.15)
-        main_label_np.setPos(0, -depth / 2 - 0.01, 0)
-        main_label_np.setColor(0, 0, 0, 1)
-        main_label_np.setBillboardAxis()
+        
+        # Размер шрифта уменьшен для PO# меток
+        font_size = min(width, height) * 0.15  # еще меньший размер для лучшей читаемости
+        main_label_np.setScale(font_size)
+        main_label_np.setPos(0, -depth / 2 - 0.1, 0)  # Ближе к поверхности
+        main_label_np.setHpr(0, 0, 0)
+        main_label_np.setColor(0, 0, 0, 1)  # черный текст
+        main_label_np.setDepthOffset(1)
+        main_label_np.setLightOff(1)  # Отключаем освещение для текста
+        main_label_np.setBillboardPointEye()  # Всегда повернут к камере
+        
+        # Функция для создания размерных надписей (аналогично createTextSizeBoxes из content.html)
+        def create_size_label(text, x, y, z, h, p, r):
+            label_node = TextNode('size_label')
+            label_node.setText(str(int(text)))
+            label_node.setAlign(TextNode.ACenter)
+            if font:
+                label_node.setFont(font)
+            label_np = box_node.attachNewNode(label_node)
+            
+            # Масштаб как в content.html (30 для font_size, размер плоскости от высоты коробки)
+            font_size_label = 30
+            plane_height = text / 5  # как в content.html: boxWidth_f[i] / 5
+            scale_factor = plane_height / (1.5 * font_size_label) * 0.1  # коэффициент для Panda3D
+            label_np.setScale(scale_factor)
+            
+            # Позиция как в content.html (с учетом смещений x - 4, y, z + 4)
+            label_np.setPos(x - 4, y, z + 4)
+            label_np.setHpr(h, p, r)
+            label_np.setColor(0, 0, 0, 1)  # черный текст как в content.html
+            label_np.setDepthOffset(1)
+            return label_np
+        
+        # Надпись ширины (как meshWidth в content.html)
+        # createTextSizeBoxes(30, boxWidth_f[i] / 5, boxWidth_f[i], 0, boxHeight_f[i] / 2 + 0.4, - boxDepth_f[i] / 2 + boxWidth_f[i] / 10, Math.PI / 2, Math.PI, 0)
+        width_label = create_size_label(
+            width, 
+            0, 
+            height / 2 + 0.4, 
+            -depth / 2 + width / 10,
+            90,  # Math.PI / 2 в градусах
+            180, # Math.PI в градусах 
+            0
+        )
+        
+        # Надпись глубины (как meshDepth в content.html)
+        # createTextSizeBoxes(30, boxDepth_f[i] / 5, boxDepth_f[i], boxWidth_f[i] / 2 - boxDepth_f[i] / 10, boxHeight_f[i] / 2 + 0.4, 0, Math.PI / 2, -Math.PI / 2, 0)
+        depth_label = create_size_label(
+            depth, 
+            width / 2 - depth / 10, 
+            height / 2 + 0.4, 
+            0,
+            90,   # Math.PI / 2 в градусах
+            -90,  # -Math.PI / 2 в градусах
+            0
+        )
 
-        width_label_node = TextNode('width_label')
-        width_label_node.setText(str(int(box_data['width'])))
-        width_label_node.setAlign(TextNode.ACenter)
-        width_label_np = box_node.attachNewNode(width_label_node)
-        width_label_np.setScale(height * 0.08)
-        width_label_np.setPos(0, depth / 2 + 0.02, height / 2 + 0.02)
-        width_label_np.setH(0)
-        width_label_np.setP(90)
-        width_label_np.setColor(0, 0, 0, 1)
-
-        depth_label_node = TextNode('depth_label')
-        depth_label_node.setText(str(int(box_data['depth'])))
-        depth_label_node.setAlign(TextNode.ACenter)
-        depth_label_np = box_node.attachNewNode(depth_label_node)
-        depth_label_np.setScale(height * 0.08)
-        depth_label_np.setPos(width / 2 + 0.02, 0, height / 2 + 0.02)
-        depth_label_np.setH(-90)
-        depth_label_np.setP(90)
-        depth_label_np.setColor(0, 0, 0, 1)
-
-        weight_label_node = TextNode('weight_label')
-        weight_label_node.setText(f"{box_data['weight']}kg")
-        weight_label_node.setAlign(TextNode.ACenter)
-        weight_label_np = box_node.attachNewNode(weight_label_node)
-        weight_label_np.setScale(height * 0.06)
-        weight_label_np.setPos(-width / 2 - 0.01, 0, -height / 4)
-        weight_label_np.setH(90)
-        weight_label_np.setColor(0, 0, 0, 1)
-
+        # Отключаем освещение для текстовых меток
         main_label_np.setLightOff(1)
-        width_label_np.setLightOff(1)
-        depth_label_np.setLightOff(1)
-        weight_label_np.setLightOff(1)
+        width_label.setLightOff(1)
+        depth_label.setLightOff(1)
 
     def remove_material_specular(self, model):
         if not model or model.isEmpty():
@@ -627,15 +699,27 @@ class TruckLoadingApp(ShowBase):
 
     def setup_controls(self):
         print("Setting up controls...")
-        self.accept("mouse1", self.arc.on_left_down)
+        # Мышь
+        self.accept("mouse1", self.on_mouse_left_click)
         self.accept("mouse1-up", self.arc.on_left_up)
         self.accept("mouse3", self.arc.on_right_down)
         self.accept("mouse3-up", self.arc.on_right_up)
         self.accept("wheel_up", self.arc.on_wheel_in)
         self.accept("wheel_down", self.arc.on_wheel_out)
+        
+        # Модификаторы
         self.accept("shift", self.shift_down)
         self.accept("shift-up", self.shift_up)
-
+        
+        # Горячие клавиши для управления коробками
+        self.accept("r", self.rotate_selected_box)
+        self.accept("к", self.rotate_selected_box)  # русская к
+        self.accept("backspace", self.delete_selected_box)
+        self.accept("delete", self.delete_selected_box)
+        
+        # Дополнительные клавиши (как в content.html)
+        self.accept("q", self.rotate_selected_box)
+        
         print("Controls setup complete")
 
     def focus_on_truck(self):
@@ -655,6 +739,111 @@ class TruckLoadingApp(ShowBase):
 
     def shift_up(self):
         self.is_shift_down = False
+    
+    def rotate_selected_box(self):
+        """Повернуть выбранную коробку (поменять ширину и глубину)"""
+        if self.selected_box:
+            try:
+                # Получаем данные коробки
+                box_data = self.selected_box.getPythonTag('box_data')
+                if box_data:
+                    # Меняем местами ширину и глубину
+                    old_width = box_data.get('width', 100)
+                    old_depth = box_data.get('depth', 100)
+                    
+                    box_data['width'] = old_depth
+                    box_data['depth'] = old_width
+                    box_data['is_rotated'] = not box_data.get('is_rotated', False)
+                    
+                    # Пересоздаем коробку
+                    old_pos = self.selected_box.getPos()
+                    self.selected_box.removeNode()
+                    
+                    # Создаем новую коробку с повернутыми размерами
+                    new_box = self.create_3d_box_from_data(box_data, (old_pos.x, old_pos.y, old_pos.z))
+                    self.selected_box = new_box
+                    
+                    print(f"Box rotated: {old_width}x{old_depth} -> {box_data['width']}x{box_data['depth']}")
+            except Exception as e:
+                logging.error(f"Error rotating box: {e}")
+    
+    def delete_selected_box(self):
+        """Удалить выбранную коробку"""
+        if self.selected_box:
+            try:
+                box_data = self.selected_box.getPythonTag('box_data')
+                if box_data:
+                    print(f"Deleting box: {box_data.get('label', 'Unknown')}")
+                
+                # Удаляем из списка коробок в сцене
+                if hasattr(self, 'scene_boxes') and self.selected_box in self.scene_boxes:
+                    self.scene_boxes.remove(self.selected_box)
+                
+                # Удаляем узел из сцены
+                self.selected_box.removeNode()
+                self.selected_box = None
+                
+                print("Box deleted successfully")
+            except Exception as e:
+                logging.error(f"Error deleting box: {e}")
+    
+    def set_selected_box(self, box_node):
+        """Установить выбранную коробку"""
+        if self.selected_box:
+            # Убираем выделение с предыдущей коробки
+            self.selected_box.clearColorScale()
+        
+        self.selected_box = box_node
+        
+        if self.selected_box:
+            # Подсвечиваем выбранную коробку
+            self.selected_box.setColorScale(1.2, 1.2, 1.0, 1.0)
+    
+    def on_mouse_left_click(self):
+        """Обработка клика левой кнопкой мыши для выделения коробок"""
+        # Получаем позицию мыши
+        if self.mouseWatcherNode.hasMouse():
+            mouse_x = self.mouseWatcherNode.getMouseX()
+            mouse_y = self.mouseWatcherNode.getMouseY()
+            
+            # Создаем луч от камеры через позицию мыши
+            from panda3d.core import CollisionTraverser, CollisionNode, CollisionRay, CollisionHandlerQueue
+            
+            picker = CollisionTraverser()
+            pq = CollisionHandlerQueue()
+            
+            pickerNode = CollisionNode('mouseRay')
+            pickerNP = self.camera.attachNewNode(pickerNode)
+            pickerNode.setFromCollideMask(1)
+            pickerNode.setIntoCollideMask(0)  # Исправляем проблему с коллизией CollisionRay в CollisionRay
+            pickerRay = CollisionRay()
+            pickerNode.addSolid(pickerRay)
+            picker.addCollider(pickerNP, pq)
+            
+            # Направляем луч от камеры через мышь
+            pickerRay.setFromLens(self.camNode, mouse_x, mouse_y)
+            
+            # Ищем пересечения с коробками
+            picker.traverse(self.render)
+            
+            if pq.getNumEntries() > 0:
+                # Сортируем по расстоянию
+                pq.sortEntries()
+                entry = pq.getEntry(0)
+                picked_obj = entry.getIntoNodePath()
+                
+                # Ищем коробку среди родителей
+                while picked_obj:
+                    if picked_obj.getName().startswith('randomBox'):
+                        self.set_selected_box(picked_obj)
+                        return
+                    picked_obj = picked_obj.getParent()
+            
+            # Если ничего не выбрали, убираем выделение
+            self.set_selected_box(None)
+        
+        # Также вызываем оригинальный обработчик камеры
+        self.arc.on_left_down()
 
     def init_first_truck(self):
         first_truck = {

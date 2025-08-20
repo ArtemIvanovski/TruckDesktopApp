@@ -40,7 +40,7 @@ class PandaWidget(QtWidgets.QWidget):
         self.timer = QtCore.QTimer(self)
         self.timer.timeout.connect(self._step)
         self.timer.start(16)
-        QtCore.QTimer.singleShot(0, self._init_panda)
+        QtCore.QTimer.singleShot(100, self._init_panda)
 
     def _init_panda(self):
         try:
@@ -84,32 +84,25 @@ class PandaWidget(QtWidgets.QWidget):
 
                 world_pos = self.screen_to_world(screen_x, screen_y)
                 self.app3d.create_3d_box_from_data(box_data, world_pos)
-
-            event.acceptProposedAction()
+                
+                # Устанавливаем правильный action для успешного drag&drop
+                event.setDropAction(QtCore.Qt.MoveAction)
+                event.accept()
+                logging.info(f"Successfully dropped box: {box_data.get('label', 'Unknown')}")
         except Exception as e:
             logging.error(f"Error handling drop: {e}")
             event.ignore()
 
     def screen_to_world(self, screen_x, screen_y):
-        if not self.app3d or not hasattr(self.app3d, 'render'):
+        if not self.app3d:
             return (0, 0, 0)
 
-        from panda3d.core import CollisionRay, CollisionNode, CollisionTraverser, CollisionHandlerQueue
-
-        ray = CollisionRay()
-        ray.setFromLens(self.app3d.camNode, screen_x * 2 - 1, screen_y * 2 - 1)
-
-        ground_z = 0
-        ray_dir = ray.getDirection()
-        ray_origin = ray.getOrigin()
-
-        if ray_dir.z != 0:
-            t = (ground_z - ray_origin.z) / ray_dir.z
-            world_x = ray_origin.x + t * ray_dir.x
-            world_y = ray_origin.y + t * ray_dir.y
-            return (world_x, world_y, ground_z)
-
-        return (0, 0, 0)
+        # Размещаем коробки перед грузовиком на земле
+        truck_front_y = -600  # Перед грузовиком (грузовик находится в районе 0, колеса в -125)
+        world_x = (screen_x - 0.5) * 800  # Уменьшаем диапазон для лучшего размещения
+        world_y = truck_front_y
+        world_z = 0  # На уровне земли
+        return (world_x, world_y, world_z)
 
     def _step(self):
         try:
@@ -137,6 +130,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setWindowTitle("GTSTREAM")
         self.setMinimumSize(1000, 700)
         self.setWindowIcon(QtGui.QIcon(get_resource_path("assets/icon/logo.png")))
+        
+        # Устанавливаем размер окна на весь доступный экран
+        screen = QtWidgets.QApplication.primaryScreen()
+        if screen:
+            screen_geometry = screen.availableGeometry()
+            self.resize(screen_geometry.width(), screen_geometry.height())
+            self.move(screen_geometry.x(), screen_geometry.y())
 
         from units import UnitsManager
         self.units_manager = UnitsManager()
@@ -150,6 +150,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.sidebar.toggled.connect(self._on_sidebar_toggled)
 
         self.hotkeys = HotkeyController(self)
+        # Подключаем сигналы горячих клавиш к функциям
+        self.hotkeys.rotate_box.connect(self.on_rotate_box)
+        self.hotkeys.delete_box.connect(self.on_delete_box)
+        
         self.setup_menu_bar()
         self.setStatusBar(None)
 
@@ -225,6 +229,16 @@ class MainWindow(QtWidgets.QMainWindow):
     def _on_viewer_ready(self):
         """Обработчик готовности 3D-движка"""
         logging.info("[Qt] Panda3D ready")
+    
+    def on_rotate_box(self):
+        """Поворот выбранной коробки через горячую клавишу"""
+        if hasattr(self.viewer, 'app3d') and self.viewer.app3d:
+            self.viewer.app3d.rotate_selected_box()
+    
+    def on_delete_box(self):
+        """Удаление выбранной коробки через горячую клавишу"""
+        if hasattr(self.viewer, 'app3d') and self.viewer.app3d:
+            self.viewer.app3d.delete_selected_box()
 
     def setup_menu_bar(self):
         """Настройка меню"""
@@ -379,15 +393,17 @@ class MainWindow(QtWidgets.QMainWindow):
         """Вид сверху"""
         if hasattr(self.viewer, 'app3d') and self.viewer.app3d:
             cam = self.viewer.app3d.arc
+            cam.target.set(0, 0, 0)
             cam.radius = 1400
             cam.alpha = 3.14159265 / 2
-            cam.beta = 0.00001
+            cam.beta = 0
             cam.update()
 
     def _view_left(self):
         """Вид слева"""
         if hasattr(self.viewer, 'app3d') and self.viewer.app3d:
             cam = self.viewer.app3d.arc
+            cam.target.set(0, 0, 0)
             cam.radius = 1400
             cam.alpha = 3.14159265 / 2
             cam.beta = 3.14159265 / 2
@@ -397,6 +413,7 @@ class MainWindow(QtWidgets.QMainWindow):
         """Вид справа"""
         if hasattr(self.viewer, 'app3d') and self.viewer.app3d:
             cam = self.viewer.app3d.arc
+            cam.target.set(0, 0, 0)
             cam.radius = 1400
             cam.alpha = -3.14159265 / 2
             cam.beta = 3.14159265 / 2
@@ -406,10 +423,10 @@ class MainWindow(QtWidgets.QMainWindow):
         """Сброс вида"""
         if hasattr(self.viewer, 'app3d') and self.viewer.app3d:
             cam = self.viewer.app3d.arc
+            cam.target.set(0, 0, 0)
             cam.radius = 2000
             cam.alpha = 3.14159265 / 2
             cam.beta = 3.14159265 / 3
-            cam.target.set(0, 300, 0)
             cam.update()
 
     def _toggle_fullscreen(self):

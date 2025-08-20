@@ -123,47 +123,53 @@ class LeftSidebar(QtWidgets.QWidget):
         w.setObjectName("TruckPanel")
         lay = QtWidgets.QVBoxLayout(w)
         lay.setContentsMargins(8, 8, 8, 8)
-        lay.setSpacing(5)
+        lay.setSpacing(8)
 
         # Panel title
         title = QtWidgets.QLabel("Настройки прицепа")
         title.setObjectName("PanelTitle")
         title.setStyleSheet("""
-            QLabel#PanelTitle { 
+            QLabel { 
                 font-weight: bold; 
-                font-size: 14px; 
-                margin-bottom: 8px; 
+                font-size: 12px; 
                 color: #2c3e50;
-                padding: 6px;
-                background-color: #f8f9fa;
-                border-radius: 4px;
+                padding: 4px;
+                background-color: #ecf0f1;
+                border-radius: 3px;
             }
         """)
         lay.addWidget(title)
 
-        # Open/Close group
-        gb_state = QtWidgets.QGroupBox("Состояние тента")
-        gb_state.setStyleSheet("""
-            QGroupBox {
-                font-weight: bold;
+        # Tent state section
+        self.tent_btn = QtWidgets.QPushButton("🎪 Состояние тента ▲")
+        self.tent_btn.setCheckable(True)
+        self.tent_btn.setChecked(True)
+        self.tent_btn.clicked.connect(self.toggle_tent)
+        self.tent_btn.setStyleSheet("""
+            QPushButton {
                 font-size: 11px;
+                font-weight: bold;
                 color: #2c3e50;
-                border: 2px solid #bdc3c7;
-                border-radius: 6px;
-                margin-top: 10px;
-                padding-top: 12px;
-                background-color: #fdfdfd;
+                background-color: #f8f9fa;
+                border: 1px solid #dee2e6;
+                border-radius: 4px;
+                padding: 6px;
+                text-align: left;
             }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 6px 0 6px;
-                background-color: white;
-                border-radius: 3px;
+            QPushButton:hover {
+                background-color: #e9ecef;
+                border-color: #3498db;
+            }
+            QPushButton:checked {
+                background-color: #e3f2fd;
+                border-color: #2196f3;
             }
         """)
-        v = QtWidgets.QVBoxLayout(gb_state)
-        v.setContentsMargins(8, 8, 8, 8)
+        lay.addWidget(self.tent_btn)
+
+        self.tent_widget = QtWidgets.QWidget()
+        v = QtWidgets.QVBoxLayout(self.tent_widget)
+        v.setContentsMargins(8, 4, 8, 8)
         v.setSpacing(6)
         btn_open = QtWidgets.QRadioButton("Открыт")
         btn_close = QtWidgets.QRadioButton("Закрыт")
@@ -180,7 +186,7 @@ class LeftSidebar(QtWidgets.QWidget):
                 width: 14px;
                 height: 14px;
                 border-radius: 7px;
-                border: 2px solid #bdc3c7;
+                border: 1px solid #bdc3c7;
                 background-color: white;
             }
             QRadioButton::indicator:checked {
@@ -197,31 +203,38 @@ class LeftSidebar(QtWidgets.QWidget):
         v.addWidget(btn_close)
         btn_open.toggled.connect(lambda on: on and self._set_tent_alpha(0.0))
         btn_close.toggled.connect(lambda on: on and self._set_tent_alpha(0.3))
-        lay.addWidget(gb_state)
+        lay.addWidget(self.tent_widget)
 
-        # Presets group
-        gb_presets = QtWidgets.QGroupBox("Размеры")
-        gb_presets.setStyleSheet("""
-            QGroupBox {
-                font-weight: bold;
+        # Presets section
+        self.presets_btn = QtWidgets.QPushButton("📏 Размеры ▲")
+        self.presets_btn.setCheckable(True)
+        self.presets_btn.setChecked(True)
+        self.presets_btn.clicked.connect(self.toggle_presets)
+        self.presets_btn.setStyleSheet("""
+            QPushButton {
                 font-size: 11px;
+                font-weight: bold;
                 color: #2c3e50;
-                border: 2px solid #bdc3c7;
-                border-radius: 6px;
-                margin-top: 10px;
-                padding-top: 12px;
-                background-color: #fdfdfd;
+                background-color: #f8f9fa;
+                border: 1px solid #dee2e6;
+                border-radius: 4px;
+                padding: 6px;
+                text-align: left;
             }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 6px 0 6px;
-                background-color: white;
-                border-radius: 3px;
+            QPushButton:hover {
+                background-color: #e9ecef;
+                border-color: #3498db;
+            }
+            QPushButton:checked {
+                background-color: #e3f2fd;
+                border-color: #2196f3;
             }
         """)
-        form = QtWidgets.QFormLayout(gb_presets)
-        form.setContentsMargins(8, 8, 8, 8)
+        lay.addWidget(self.presets_btn)
+
+        self.presets_widget = QtWidgets.QWidget()
+        form = QtWidgets.QFormLayout(self.presets_widget)
+        form.setContentsMargins(8, 4, 8, 8)
         form.setSpacing(5)
         presets = [
             ("Тент 13.6", 1360, 260, 245),
@@ -231,7 +244,7 @@ class LeftSidebar(QtWidgets.QWidget):
             ("Рефр", 1340, 239, 235),
             ("Тент 16.5", 1650, 260, 245),
         ]
-        grp = QtWidgets.QButtonGroup(gb_presets)
+        grp = QtWidgets.QButtonGroup(self.presets_widget)
         grp.setExclusive(True)
         for title, W, H, D in presets:
             rb = QtWidgets.QRadioButton(title)
@@ -247,7 +260,7 @@ class LeftSidebar(QtWidgets.QWidget):
                     width: 14px;
                     height: 14px;
                     border-radius: 7px;
-                    border: 2px solid #bdc3c7;
+                    border: 1px solid #bdc3c7;
                     background-color: white;
                 }
                 QRadioButton::indicator:checked {
@@ -261,49 +274,49 @@ class LeftSidebar(QtWidgets.QWidget):
             grp.addButton(rb)
             form.addRow(rb)
             rb.toggled.connect(lambda on, w=W, h=H, d=D: on and self._switch_truck(w, h, d))
-        lay.addWidget(gb_presets)
+        lay.addWidget(self.presets_widget)
 
-        # Custom size
-        gb_custom = QtWidgets.QGroupBox("Свой размер")
-        gb_custom.setStyleSheet("""
-            QGroupBox {
-                font-weight: bold;
+        # Custom size section
+        self.custom_btn = QtWidgets.QPushButton("⚙️ Свой размер ▲")
+        self.custom_btn.setCheckable(True)
+        self.custom_btn.clicked.connect(self.toggle_custom)
+        self.custom_btn.setStyleSheet("""
+            QPushButton {
                 font-size: 11px;
+                font-weight: bold;
                 color: #2c3e50;
-                border: 2px solid #bdc3c7;
-                border-radius: 6px;
-                margin-top: 10px;
-                padding-top: 12px;
-                background-color: #fdfdfd;
+                background-color: #f8f9fa;
+                border: 1px solid #dee2e6;
+                border-radius: 4px;
+                padding: 6px;
+                text-align: left;
             }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 6px 0 6px;
-                background-color: white;
-                border-radius: 3px;
+            QPushButton:hover {
+                background-color: #e9ecef;
+                border-color: #3498db;
+            }
+            QPushButton:checked {
+                background-color: #e3f2fd;
+                border-color: #2196f3;
             }
         """)
-        grid = QtWidgets.QGridLayout(gb_custom)
-        grid.setContentsMargins(8, 8, 8, 8)
+        lay.addWidget(self.custom_btn)
+
+        self.custom_widget = QtWidgets.QWidget()
+        grid = QtWidgets.QGridLayout(self.custom_widget)
+        grid.setContentsMargins(8, 4, 8, 8)
         grid.setSpacing(6)
 
         input_style = """
-            QLineEdit {
-                font-size: 11px;
-                font-weight: 500;
+            QLineEdit, QSpinBox, QDoubleSpinBox {
                 padding: 4px;
-                border: 2px solid #bdc3c7;
-                border-radius: 4px;
+                border: 1px solid #bdc3c7;
+                border-radius: 3px;
                 background-color: white;
-                color: #2c3e50;
+                font-size: 10px;
             }
-            QLineEdit:focus {
-                border-color: #3498db;
-                background-color: #f8f9fa;
-            }
-            QLineEdit:hover {
-                border-color: #95a5a6;
+            QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus {
+                border: 2px solid #3498db;
             }
         """
 
@@ -339,78 +352,44 @@ class LeftSidebar(QtWidgets.QWidget):
         grid.addWidget(lbl_d, 2, 0);
         grid.addWidget(self.ed_d, 2, 1)
 
-        self.cb_custom = QtWidgets.QCheckBox("Свой размер")
-        self.cb_custom.setStyleSheet("""
-            QCheckBox {
-                font-size: 11px;
-                font-weight: 500;
-                color: #2c3e50;
-                spacing: 6px;
-                padding: 2px;
-            }
-            QCheckBox::indicator {
-                width: 16px;
-                height: 16px;
-                border: 2px solid #bdc3c7;
-                border-radius: 3px;
-                background-color: white;
-            }
-            QCheckBox::indicator:checked {
-                background-color: #3498db;
-                border-color: #2980b9;
-            }
-            QCheckBox:hover {
-                color: #3498db;
-            }
-        """)
-        grid.addWidget(self.cb_custom, 3, 0, 1, 2)
-
         btn_apply = QtWidgets.QPushButton("Применить")
         btn_apply.setStyleSheet("""
             QPushButton {
                 font-size: 11px;
                 font-weight: bold;
                 color: white;
-                background-color: #3498db;
+                background-color: #27ae60;
                 border: none;
-                border-radius: 5px;
-                padding: 6px 12px;
-                min-height: 28px;
+                border-radius: 4px;
+                padding: 8px;
+                min-height: 24px;
             }
             QPushButton:hover {
-                background-color: #2980b9;
-                transform: translateY(-1px);
+                background-color: #2ecc71;
             }
             QPushButton:pressed {
-                background-color: #21618c;
-                transform: translateY(1px);
+                background-color: #229954;
             }
         """)
-        grid.addWidget(btn_apply, 4, 0, 1, 2)
+        grid.addWidget(btn_apply, 3, 0, 1, 2)
         btn_apply.clicked.connect(self._apply_custom)
-        lay.addWidget(gb_custom)
+        self.custom_widget.hide()
+        lay.addWidget(self.custom_widget)
 
         # Reset
         btn_reset = QtWidgets.QPushButton("Сбросить")
         btn_reset.setStyleSheet("""
             QPushButton {
-                font-size: 11px;
-                font-weight: bold;
+                font-size: 10px;
                 color: #2c3e50;
                 background-color: #ecf0f1;
-                border: 2px solid #bdc3c7;
-                border-radius: 5px;
-                padding: 6px 12px;
-                min-height: 28px;
+                border: 1px solid #bdc3c7;
+                border-radius: 4px;
+                padding: 6px;
+                min-height: 20px;
             }
             QPushButton:hover {
                 background-color: #d5dbdb;
-                border-color: #95a5a6;
-                transform: translateY(-1px);
-            }
-            QPushButton:pressed {
-                background-color: #bdc3c7;
-                transform: translateY(1px);
             }
         """)
         btn_reset.clicked.connect(self._reset_defaults)
@@ -438,8 +417,6 @@ class LeftSidebar(QtWidgets.QWidget):
         return None
 
     def _apply_custom(self):
-        if not self.cb_custom.isChecked():
-            return
         try:
             w = int(self.ed_w.text())
             h = int(self.ed_h.text())
@@ -451,6 +428,30 @@ class LeftSidebar(QtWidgets.QWidget):
     def _reset_defaults(self):
         self._set_tent_alpha(0.0)
         self._switch_truck(1650, 260, 245)
+
+    def toggle_tent(self):
+        if self.tent_btn.isChecked():
+            self.tent_widget.show()
+            self.tent_btn.setText("🎪 Состояние тента ▲")
+        else:
+            self.tent_widget.hide()
+            self.tent_btn.setText("🎪 Состояние тента ▼")
+
+    def toggle_presets(self):
+        if self.presets_btn.isChecked():
+            self.presets_widget.show()
+            self.presets_btn.setText("📏 Размеры ▲")
+        else:
+            self.presets_widget.hide()
+            self.presets_btn.setText("📏 Размеры ▼")
+
+    def toggle_custom(self):
+        if self.custom_btn.isChecked():
+            self.custom_widget.show()
+            self.custom_btn.setText("⚙️ Свой размер ▲")
+        else:
+            self.custom_widget.hide()
+            self.custom_btn.setText("⚙️ Свой размер ▼")
 
     def _app3d(self):
         try:

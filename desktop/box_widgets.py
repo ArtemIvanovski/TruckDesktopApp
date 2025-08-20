@@ -488,9 +488,10 @@ class Box2DWidget(QtWidgets.QWidget):
         drag.setPixmap(pixmap)
         drag.setHotSpot(pixmap.rect().center())
 
-        dropAction = drag.exec_(Qt.MoveAction)
+        dropAction = drag.exec_(Qt.MoveAction | Qt.CopyAction)
 
-        if dropAction == Qt.MoveAction:
+        # Если drag был принят (не зависимо от типа), обрабатываем как успешный
+        if dropAction != Qt.IgnoreAction:
             self.handle_successful_drag()
 
     def handle_successful_drag(self):

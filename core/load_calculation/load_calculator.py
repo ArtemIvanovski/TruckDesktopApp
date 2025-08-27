@@ -1,6 +1,7 @@
 import json
 import os
 from PyQt5.QtCore import QObject, pyqtSignal
+from utils.settings_manager import SettingsManager
 
 
 class LoadCalculator(QObject):
@@ -29,17 +30,11 @@ class LoadCalculator(QObject):
         self.load_settings()
 
     def load_settings(self):
-        if os.path.exists(self.settings_file):
-            try:
-                with open(self.settings_file, 'r') as f:
-                    loaded = json.load(f)
-                self.settings.update(loaded)
-            except:
-                pass
+        loaded = SettingsManager().get_section('load_calculation')
+        self.settings.update(loaded)
 
     def save_settings(self):
-        with open(self.settings_file, 'w') as f:
-            json.dump(self.settings, f)
+        SettingsManager().update_section('load_calculation', self.settings)
         self.settings_changed.emit()
 
     def update_setting(self, key, value):

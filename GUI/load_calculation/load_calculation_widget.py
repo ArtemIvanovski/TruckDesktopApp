@@ -16,6 +16,7 @@ class LoadCalculationWidget(QtWidgets.QWidget, TranslatableMixin):
         
         self.calculator.settings_changed.connect(self.update_display)
         
+        self._attach_to_truck_manager()
         self.update_trailer_length_from_truck()
         self.update_display()
 
@@ -28,6 +29,60 @@ class LoadCalculationWidget(QtWidgets.QWidget, TranslatableMixin):
                 if hasattr(self, 'trailer_length_label'):
                     self.trailer_length_label.setText(f"{length_cm / 100.0:.1f} м")
         except:
+            pass
+
+    def _attach_to_truck_manager(self):
+        try:
+            app = self.get_app3d()
+            if not app or not hasattr(app, 'panda_widget') or not app.panda_widget:
+                return
+            self._truck_manager = app.panda_widget.get_truck_manager()
+            if self._truck_manager:
+                self._truck_manager.add_on_changed(self._on_truck_changed)
+                # Load per-truck settings
+                self._load_from_current_truck()
+        except Exception:
+            pass
+
+    def _on_truck_changed(self):
+        # Save old settings into previous truck and load new truck settings
+        try:
+            self._save_to_current_truck()
+            self._load_from_current_truck()
+            self.update_trailer_length_from_truck()
+            self.update_display()
+        except Exception:
+            pass
+
+    def _save_to_current_truck(self):
+        try:
+            app = self.get_app3d()
+            if not app or not hasattr(app, 'panda_widget'):
+                return
+            mgr = app.panda_widget.get_truck_manager()
+            if not mgr:
+                return
+            current = mgr.get_current()
+            current.load_settings = dict(self.calculator.settings)
+            # Also capture scene boxes for this truck
+            mgr.capture_now()
+        except Exception:
+            pass
+
+    def _load_from_current_truck(self):
+        try:
+            app = self.get_app3d()
+            if not app or not hasattr(app, 'panda_widget'):
+                return
+            mgr = app.panda_widget.get_truck_manager()
+            if not mgr:
+                return
+            current = mgr.get_current()
+            if getattr(current, 'load_settings', None):
+                # Merge truck-specific settings
+                self.calculator.settings.update(current.load_settings)
+                self.calculator.settings_changed.emit()
+        except Exception:
             pass
 
     def setup_ui(self):

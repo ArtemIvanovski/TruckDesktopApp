@@ -1,0 +1,2 @@
+from .truck_management_widget import TruckManagementWidget
+

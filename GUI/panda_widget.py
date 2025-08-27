@@ -6,17 +6,12 @@ import sys
 from PyQt5 import QtWidgets, QtCore
 from GUI.box_info_widget import BoxInfoWidget
 from core.i18n import tr, TranslatableMixin
+from GUI.truck_loading_app import TruckLoadingApp
+from core.trucks import TruckManager
 
 
 print(f"Current working directory: {os.getcwd()}")
 print(f"Python path: {sys.path}")
-
-try:
-
-    from GUI.truck_loading_app import TruckLoadingApp
-    print("TruckLoadingApp imported successfully")
-except ImportError as e:
-    print(f"Import error: {e}")
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -121,6 +116,151 @@ class AxleResultsOverlay(QtWidgets.QWidget, TranslatableMixin):
             self._render()
 
 
+class TruckInfoOverlay(QtWidgets.QWidget, TranslatableMixin):
+    def __init__(self, parent=None, units_manager=None):
+        super().__init__(parent)
+        self.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents, False)
+        self.setWindowFlags(self.windowFlags() | QtCore.Qt.FramelessWindowHint)
+        # Less cramped style: larger fonts, padding, and a light background for readability
+        self.setStyleSheet("""
+            TruckInfoOverlay { 
+                background-color: rgba(255, 255, 255, 220);
+                border: 1px solid #dee2e6;
+                border-radius: 6px;
+            }
+            QLabel { 
+                color: #000; 
+                font-size: 16px; 
+            }
+            QPushButton { background: transparent; color: #000; font-size: 16px; }
+            QPushButton:disabled { color: #7f8c8d; }
+        """)
+        
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(8)
+        
+        # Заголовок с навигацией
+        header_layout = QtWidgets.QHBoxLayout()
+        header_layout.setSpacing(8)
+        
+        self.btn_prev = QtWidgets.QPushButton("◀")
+        self.btn_prev.setMaximumWidth(28)
+        self.lbl_truck_name = QtWidgets.QLabel()
+        self.lbl_truck_name.setStyleSheet("font-weight: bold; font-size: 18px; color: #000;")
+        self.btn_next = QtWidgets.QPushButton("▶")
+        self.btn_next.setMaximumWidth(28)
+        
+        header_layout.addWidget(self.btn_prev)
+        header_layout.addWidget(self.lbl_truck_name, 1)
+        header_layout.addWidget(self.btn_next)
+        layout.addLayout(header_layout)
+        
+        # Информация
+        self.lbl_status = QtWidgets.QLabel()
+        self.lbl_boxes = QtWidgets.QLabel()
+        self.lbl_weight = QtWidgets.QLabel()
+        layout.addWidget(self.lbl_status)
+        layout.addWidget(self.lbl_boxes)
+        layout.addWidget(self.lbl_weight)
+        
+        self.truck_info = None
+        self.truck_count = 0
+        self.current_index = 0
+        self.units_manager = units_manager
+        self.truck_management_widget = None
+        self.setMinimumWidth(300)
+        
+        try:
+            if self.units_manager:
+                self.units_manager.units_changed.connect(self.retranslate_ui)
+        except Exception:
+            pass
+        self.hide()
+
+    def set_truck_management_widget(self, widget):
+        """Установить виджет управления грузовиками для навигации"""
+        self.truck_management_widget = widget
+        self.btn_prev.clicked.connect(self._on_prev_clicked)
+        self.btn_next.clicked.connect(self._on_next_clicked)
+
+    def _on_prev_clicked(self):
+        if self.truck_management_widget:
+            self.truck_management_widget.switch_to_previous_truck()
+
+    def _on_next_clicked(self):
+        if self.truck_management_widget:
+            self.truck_management_widget.switch_to_next_truck()
+
+    def set_truck_info(self, truck_info: dict, truck_count: int, current_index: int):
+        self.truck_info = truck_info or {}
+        self.truck_count = truck_count
+        self.current_index = current_index
+        self._render()
+
+    def _render(self):
+        if not self.truck_info:
+            self.hide()
+            return
+        
+        # Название грузовика
+        name = self.truck_info.get('name', tr('Грузовик'))
+        self.lbl_truck_name.setText(name)
+        
+        # Статус готовности (простая надпись: значение)
+        ready = self.truck_info.get('ready', False)
+        status_text = tr('Готовность') + ": " + (tr('Да') if ready else tr('Нет'))
+        status_color = "#27ae60" if ready else "#e74c3c"
+        self.lbl_status.setText(status_text)
+        self.lbl_status.setStyleSheet(f"color: {status_color}; font-weight: bold; font-size: 16px;")
+        
+        # Количество коробок
+        boxes = self.truck_info.get('boxes', 0)
+        self.lbl_boxes.setText(f"{tr('Коробки')}: {boxes}")
+        
+        # Общий вес
+        weight = self.truck_info.get('weight', 0)
+        weight_symbol = self.truck_info.get('weight_symbol', 'кг')
+        self.lbl_weight.setText(f"{tr('Общий вес')}: {weight:.1f} {weight_symbol}")
+        
+        # Управление кнопками навигации
+        self.btn_prev.setEnabled(self.current_index > 0)
+        self.btn_next.setEnabled(self.current_index < self.truck_count - 1)
+        
+        # Скрываем кнопки если только один грузовик
+        if self.truck_count <= 1:
+            self.btn_prev.hide()
+            self.btn_next.hide()
+        else:
+            self.btn_prev.show()
+            self.btn_next.show()
+        
+        self.adjustSize()
+        self.show()
+
+    def position_below_axle_overlay(self, panda_widget, axle_overlay):
+        try:
+            parent = self.parentWidget()
+            if parent and panda_widget:
+                top_left = panda_widget.mapTo(parent, QtCore.QPoint(0, 0))
+                x = top_left.x() + panda_widget.width() - self.width() - 10
+                
+                # Позиционируем под оверлеем нагрузок если он видим
+                if axle_overlay and axle_overlay.isVisible():
+                    y = top_left.y() + 10 + 4 + 120 + axle_overlay.height() + 10
+                else:
+                    y = top_left.y() + 10 + 4 + 120
+                
+                self.move(x, y)
+                self.raise_()
+        except Exception:
+            pass
+
+    def retranslate_ui(self):
+        if self.truck_info:
+            self._render()
+
+
 class PandaWidget(QtWidgets.QWidget):
     ready = QtCore.pyqtSignal()
 
@@ -147,6 +287,9 @@ class PandaWidget(QtWidgets.QWidget):
             pass
         self.box_info_widget = BoxInfoWidget(self.window(), shared_units)
         self.axle_overlay = AxleResultsOverlay(self.window(), shared_units)
+        self.truck_info_overlay = TruckInfoOverlay(self.window(), shared_units)
+        self.truck_manager = TruckManager()
+        self.truck_manager.add_on_changed(self._render_truck_overlay)
         
         QtCore.QTimer.singleShot(100, self._init_panda)
 
@@ -167,6 +310,37 @@ class PandaWidget(QtWidgets.QWidget):
                 enable_direct_gui=False,
             )
             self.app3d.set_panda_widget(self)
+            self.truck_manager.set_app3d(self.app3d)
+            self.truck_manager.select_index(self.truck_manager.current_index)
+            # Применяем настройку отображения виджета грузовика при старте
+            try:
+                from utils.settings_manager import SettingsManager
+                mgr = SettingsManager()
+                section = mgr.get_section('truck_management')
+                show = bool(section.get('show_on_main_screen', False))
+            except Exception:
+                show = False
+            if show:
+                try:
+                    current = self.truck_manager.get_current()
+                    weight_symbol = None
+                    try:
+                        if hasattr(self, 'truck_info_overlay') and self.truck_info_overlay.units_manager:
+                            weight_symbol = self.truck_info_overlay.units_manager.get_weight_symbol()
+                    except Exception:
+                        pass
+                    if not weight_symbol:
+                        weight_symbol = 'кг'
+                    truck_info = {
+                        'name': current.name,
+                        'ready': current.ready,
+                        'boxes': len(current.boxes or []),
+                        'weight': 0.0,
+                        'weight_symbol': weight_symbol,
+                    }
+                    self.update_truck_info_overlay(True, truck_info, len(self.truck_manager.get_items()), self.truck_manager.current_index)
+                except Exception:
+                    pass
             self.ready.emit()
         except Exception as e:
             logging.error(f"[Qt] Failed to init Panda3D: {e}")
@@ -258,6 +432,7 @@ class PandaWidget(QtWidgets.QWidget):
         
         self.box_info_widget.position_at_corner(self)
         self.axle_overlay.position_below_box_info(self)
+        self.truck_info_overlay.position_below_axle_overlay(self, self.axle_overlay)
         super().resizeEvent(event)
     
     def show_box_info(self, box_data):
@@ -265,10 +440,32 @@ class PandaWidget(QtWidgets.QWidget):
         self.box_info_widget.show_box_info(box_data)
         self.box_info_widget.position_at_corner(self)
         self.axle_overlay.position_below_box_info(self)
+        self.truck_info_overlay.position_below_axle_overlay(self, self.axle_overlay)
 
     def update_axle_results_overlay(self, visible: bool, results: dict):
         if not visible:
             self.axle_overlay.hide()
+        else:
+            self.axle_overlay.set_results(results)
+            self.axle_overlay.position_below_box_info(self)
+        # Обновляем позицию грузовикового оверлея
+        self.truck_info_overlay.position_below_axle_overlay(self, self.axle_overlay)
+
+    def update_truck_info_overlay(self, visible: bool, truck_info: dict, truck_count: int, current_index: int):
+        """Обновить отображение информации о грузовике"""
+        if not visible:
+            self.truck_info_overlay.hide()
             return
-        self.axle_overlay.set_results(results)
-        self.axle_overlay.position_below_box_info(self)
+        self.truck_info_overlay.set_truck_info(truck_info, truck_count, current_index)
+        self.truck_info_overlay.position_below_axle_overlay(self, self.axle_overlay)
+
+    def set_truck_management_widget(self, widget):
+        """Установить виджет управления грузовиками для навигации"""
+        self.truck_info_overlay.set_truck_management_widget(widget)
+
+    def get_truck_manager(self):
+        return self.truck_manager
+
+    def _render_truck_overlay(self):
+        # Устаревший метод, оставлен для совместимости
+        pass

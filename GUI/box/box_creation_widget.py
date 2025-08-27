@@ -114,7 +114,7 @@ class BoxCreationWidget(QtWidgets.QWidget, TranslatableMixin):
         self.width_input = QtWidgets.QDoubleSpinBox()
         self.width_input.setRange(0.1, 999.9)
         self.width_input.setDecimals(1)
-        self.width_input.setValue(self.units_manager.from_internal_distance(100))  # 100 см в пользовательских единицах
+        self.width_input.setValue(self.units_manager.from_internal_distance(100))
         self.width_input.setStyleSheet(input_style)
         form.addWidget(self.width_input, 0, 1)
 
@@ -123,7 +123,7 @@ class BoxCreationWidget(QtWidgets.QWidget, TranslatableMixin):
         self.depth_input = QtWidgets.QDoubleSpinBox()
         self.depth_input.setRange(0.1, 999.9)
         self.depth_input.setDecimals(1)
-        self.depth_input.setValue(self.units_manager.from_internal_distance(80))   # 80 см в пользовательских единицах
+        self.depth_input.setValue(self.units_manager.from_internal_distance(80))
         self.depth_input.setStyleSheet(input_style)
         form.addWidget(self.depth_input, 1, 1)
 
@@ -132,7 +132,7 @@ class BoxCreationWidget(QtWidgets.QWidget, TranslatableMixin):
         self.height_input = QtWidgets.QDoubleSpinBox()
         self.height_input.setRange(0.1, 999.9)
         self.height_input.setDecimals(1)
-        self.height_input.setValue(self.units_manager.from_internal_distance(60))  # 60 см в пользовательских единицах
+        self.height_input.setValue(self.units_manager.from_internal_distance(60))
         self.height_input.setStyleSheet(input_style)
         form.addWidget(self.height_input, 2, 1)
 
@@ -147,7 +147,7 @@ class BoxCreationWidget(QtWidgets.QWidget, TranslatableMixin):
         form.addWidget(self.weight_label, 4, 0)
         self.weight_input = QtWidgets.QDoubleSpinBox()
         self.weight_input.setRange(0.1, 999.9)
-        self.weight_input.setValue(self.units_manager.from_internal_weight(5.0))  # 5 кг в пользовательских единицах
+        self.weight_input.setValue(self.units_manager.from_internal_weight(5.0))
         self.weight_input.setDecimals(1)
         self.weight_input.setStyleSheet(input_style)
         form.addWidget(self.weight_input, 4, 1)
@@ -276,9 +276,8 @@ class BoxCreationWidget(QtWidgets.QWidget, TranslatableMixin):
                 cargo_markings=selected_markings
             )
 
-            # Убираем индивидуальный цвет - цвет будет определяться размерами как в Babylon.js
             box.color = None
-            
+
             print(f"[BoxCreation] Created box {box.label} without individual color (will be determined by size)")
 
             self.box_created.emit(box)
@@ -311,13 +310,13 @@ class BoxCreationWidget(QtWidgets.QWidget, TranslatableMixin):
         else:
             self.advanced_widget.hide()
             self.advanced_btn.setText(f"⚙️ {tr('Дополнительно')} ▼")
-    
+
     def retranslate_ui(self):
         distance_symbol = self.units_manager.get_distance_symbol()
         weight_symbol = self.units_manager.get_weight_symbol()
-        
+
         self.title.setText(tr("Добавить коробки"))
-        
+
         # Обновляем метки
         self.length_label.setText(f"{tr('Длина')} ({distance_symbol}):")
         self.width_label.setText(f"{tr('Ширина')} ({distance_symbol}):")
@@ -325,21 +324,21 @@ class BoxCreationWidget(QtWidgets.QWidget, TranslatableMixin):
         self.marking_label.setText(f"{tr('Маркировка')}:")
         self.weight_label.setText(f"{tr('Вес')} ({weight_symbol}):")
         self.quantity_label.setText(f"{tr('Количество')}:")
-        
+
         # Обновляем кнопки
         if self.basic_btn.isChecked():
             self.basic_btn.setText(f"📋 {tr('Основные параметры')} ▲")
         else:
             self.basic_btn.setText(f"📋 {tr('Основные параметры')} ▼")
-            
+
         if self.advanced_btn.isChecked():
             self.advanced_btn.setText(f"⚙️ {tr('Дополнительно')} ▲")
         else:
             self.advanced_btn.setText(f"⚙️ {tr('Дополнительно')} ▼")
-        
+
         self.info_label.setText(f"{tr('Информация')}:")
         self.info_input.setPlaceholderText(tr("Дополнительная информация..."))
         self.markings_group.setTitle(f"🏷️ {tr('Маркировки груза')}")
-        
+
         self.add_button.setText(tr("Добавить"))
         self.clear_button.setText(tr("Очистить"))

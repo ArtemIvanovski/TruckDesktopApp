@@ -2,6 +2,7 @@ import json
 import os
 from PyQt5.QtCore import QObject, pyqtSignal
 from core.i18n import tr
+from utils.settings_manager import SettingsManager
 
 
 class UnitsManager(QObject):
@@ -66,19 +67,12 @@ class UnitsManager(QObject):
         self.units_changed.emit()
 
     def save_settings(self):
-        settings = {
+        SettingsManager().update_section('units', {
             'distance_unit': self.distance_unit,
             'weight_unit': self.weight_unit
-        }
-        with open(self.settings_file, 'w') as f:
-            json.dump(settings, f)
+        })
 
     def load_settings(self):
-        if os.path.exists(self.settings_file):
-            try:
-                with open(self.settings_file, 'r') as f:
-                    settings = json.load(f)
-                self.distance_unit = settings.get('distance_unit', 'cm')
-                self.weight_unit = settings.get('weight_unit', 'kg')
-            except:
-                pass
+        settings = SettingsManager().get_section('units')
+        self.distance_unit = settings.get('distance_unit', 'cm')
+        self.weight_unit = settings.get('weight_unit', 'kg')

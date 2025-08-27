@@ -9,10 +9,10 @@ class Box(QObject):
         'this_way_up': {'name': 'Верх', 'icon': '⬆️', 'symbol': '↑↑'},
         'no_stack': {'name': 'Не штабелировать', 'icon': '📦', 'symbol': '⛔'},
         'keep_dry': {'name': 'Беречь от влаги', 'icon': '☔', 'symbol': '💧'},
-        'center_gravity': {'name': 'Центр тяжести', 'icon': '⚖️', 'symbol': '⊕'},
         'alcohol': {'name': 'Алкоголь', 'icon': '🍺', 'symbol': '🍷'},
         'no_hooks': {'name': 'Без крюков', 'icon': '🚫', 'symbol': '⚓'},
-        'temperature': {'name': 'Температурный режим', 'icon': '🌡️', 'symbol': '❄️'}
+        'temperature': {'name': 'Температурный режим', 'icon': '🌡️', 'symbol': '❄️'},
+        'dangerous_goods': {'name': 'Опасный груз', 'icon': '⚠️', 'symbol': '☢️'}
     }
 
     changed = pyqtSignal()

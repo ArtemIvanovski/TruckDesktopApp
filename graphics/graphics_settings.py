@@ -2,6 +2,7 @@ import json
 import logging
 import os
 from core.i18n import tr
+from utils.setting_deploy import get_resource_path
 
 logger = logging.getLogger(__name__)
 
@@ -102,20 +103,22 @@ class GraphicsSettings:
     def save_to_file(self, filepath="config/graphics_settings.json"):
         """Сохранить настройки в файл"""
         try:
-            with open(filepath, 'w', encoding='utf-8') as f:
+            abs_path = get_resource_path(filepath)
+            with open(abs_path, 'w', encoding='utf-8') as f:
                 json.dump(self.to_dict(), f, indent=2, ensure_ascii=False)
-            logger.info(f"Graphics settings saved to {filepath}")
+            logger.info(f"Graphics settings saved to {abs_path}")
         except Exception as e:
             logger.error(f"Failed to save graphics settings: {e}")
 
     def load_from_file(self, filepath="config/graphics_settings.json"):
         """Загрузить настройки из файла"""
         try:
-            if os.path.exists(filepath):
-                with open(filepath, 'r', encoding='utf-8') as f:
+            abs_path = get_resource_path(filepath)
+            if os.path.exists(abs_path):
+                with open(abs_path, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                 self.from_dict(data)
-                logger.info(f"Graphics settings loaded from {filepath}")
+                logger.info(f"Graphics settings loaded from {abs_path}")
                 return True
         except Exception as e:
             logger.error(f"Failed to load graphics settings: {e}")

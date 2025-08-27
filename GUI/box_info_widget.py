@@ -1,7 +1,9 @@
 import logging
-from PyQt5.QtWidgets import QWidget, QLabel, QVBoxLayout
+
 from PyQt5.QtCore import Qt, QTimer, QPoint
-from PyQt5.QtGui import QFont, QPalette
+from PyQt5.QtGui import QFont
+from PyQt5.QtWidgets import QWidget, QLabel, QVBoxLayout
+
 from core.i18n import tr
 from core.units import UnitsManager
 
@@ -16,7 +18,6 @@ class BoxInfoWidget(QWidget):
         self._last_box_data = None
         
         self.setup_ui()
-        # Обновлять вид при смене единиц
         try:
             self.units_manager.units_changed.connect(self._on_units_changed)
         except Exception:
@@ -25,7 +26,6 @@ class BoxInfoWidget(QWidget):
     
     def setup_ui(self):
         self.setFixedWidth(280)
-        # Прозрачный для мыши, без рамок, обычный текст
         self.setAttribute(Qt.WA_TransparentForMouseEvents, True)
 
         font = QFont()
@@ -110,9 +110,7 @@ class BoxInfoWidget(QWidget):
             
             self.adjustSize()
             self.show()
-            # Убираем автоматическое скрытие - пусть показывается пока курсор на коробке
-            # self.hide_timer.start(3000)
-            
+
             logging.info(f"[BoxInfoWidget] Successfully displayed info for box: {box_data.get('label', 'Unknown')}")
             
         except Exception as e:

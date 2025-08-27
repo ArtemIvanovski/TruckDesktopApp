@@ -3,3 +3,7 @@ panda3d-gltf==0.3.0
 PyQt5==5.15.11
 cairosvg==2.7.1
 pillow==10.0.0
+requests==2.31.0
+numpy>=1.24.0
+matplotlib>=3.8.0
+torch>=2.2.0; sys_platform != 'win32' or platform_machine == 'x86_64'

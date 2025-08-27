@@ -3,6 +3,7 @@ import logging
 from panda3d.core import DirectionalLight
 
 from graphics.graphics_settings import GraphicsSettings, LIGHTING_PRESETS, LightingMode
+from utils.settings_manager import SettingsManager
 
 logger = logging.getLogger(__name__)
 
@@ -20,14 +21,13 @@ class GraphicsManager:
         self.load_settings()
 
     def load_settings(self, filepath="config/graphics_settings.json"):
-        """Загрузить настройки из файла"""
-        if self.settings.load_from_file(filepath):
-            # Применить загруженные настройки
+        data = SettingsManager().get_section('graphics')
+        if data:
+            self.settings.from_dict(data)
             self.apply_all_settings()
 
     def save_settings(self, filepath="config/graphics_settings.json"):
-        """Сохранить текущие настройки в файл"""
-        self.settings.save_to_file(filepath)
+        SettingsManager().update_section('graphics', self.settings.to_dict())
 
     def apply_all_settings(self):
         try:

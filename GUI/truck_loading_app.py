@@ -1,4 +1,8 @@
 import logging
+try:
+    import panda3d_gltf
+except Exception:
+    pass
 import math
 import os
 import sys

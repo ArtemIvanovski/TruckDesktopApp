@@ -15,13 +15,6 @@ print(f"Current working directory: {os.getcwd()}")
 print(f"Python path: {sys.path}")
 print(f"Files in current dir: {os.listdir('.')}")
 
-try:
-    from app3d import TruckLoadingApp
-
-    print("TruckLoadingApp imported successfully")
-except ImportError as e:
-    print(f"Import error: {e}")
-
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -132,6 +125,15 @@ class MainWindow(QtWidgets.QMainWindow, TranslatableMixin):
     def _on_viewer_ready(self):
         """Обработчик готовности 3D-движка"""
         logging.info("[Qt] Panda3D ready")
+        # Применяем текущее состояние расчета нагрузок на оверлей сразу после готовности движка
+        try:
+            if hasattr(self, 'sidebar') and hasattr(self.sidebar, 'load_calculation'):
+                lcw = self.sidebar.load_calculation
+                if lcw:
+                    lcw.update_trailer_length_from_truck()
+                    lcw.update_display()
+        except Exception:
+            logging.exception("Failed to apply initial load calculation overlay")
 
     def on_rotate_box(self):
         """Поворот выбранной коробки через горячую клавишу"""

@@ -17,14 +17,11 @@ class BoxManager(QObject):
 
     def add_box(self, box: Box):
         """Добавить коробку. Если существует идентичная коробка, то увеличить её количество"""
-        # Ищем существующую коробку с такими же параметрами
         existing_box = self.find_identical_box(box)
         
         if existing_box:
-            # Объединяем коробки
             existing_box.quantity += box.quantity
-            # Обновляем маркировку, если новая коробка имеет стандартную маркировку PO#
-            if (not box.label.startswith("PO#") and 
+            if (not box.label.startswith("PO#") and
                 existing_box.label.startswith("PO#")):
                 existing_box.label = box.label
             existing_box.changed.emit()

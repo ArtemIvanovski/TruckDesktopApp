@@ -2,6 +2,7 @@ from PyQt5 import QtWidgets, QtCore, QtGui
 
 from GUI.box.box_management_widget import BoxManagementWidget
 from GUI.load_calculation.load_calculation_widget import LoadCalculationWidget
+from GUI.trucks.truck_management_widget import TruckManagementWidget
 from core.i18n import tr, TranslatableMixin
 
 
@@ -19,6 +20,9 @@ class LeftSidebar(QtWidgets.QWidget, TranslatableMixin):
         # Подключаемся к сигналу изменения единиц измерения
         if self.units_manager:
             self.units_manager.units_changed.connect(self._update_units_display)
+        
+        # Подключаемся к изменениям грузовиков
+        QtCore.QTimer.singleShot(1000, self._try_connect_truck_manager)
         
         self.retranslate_ui()
 
@@ -51,6 +55,10 @@ class LeftSidebar(QtWidgets.QWidget, TranslatableMixin):
         self.btn_loads.clicked.connect(lambda: self._toggle_panel("loads"))
         bar_lay.addWidget(self.btn_loads)
 
+        self.btn_trucks = self._make_vertical_button(tr("Грузовики"))
+        self.btn_trucks.clicked.connect(lambda: self._toggle_panel("trucks"))
+        bar_lay.addWidget(self.btn_trucks)
+
         bar_lay.addStretch(1)
         root.addWidget(bar)
 
@@ -69,6 +77,9 @@ class LeftSidebar(QtWidgets.QWidget, TranslatableMixin):
 
         self.loads_panel = self._build_loads_panel()
         self.panel_container.addWidget(self.loads_panel)
+
+        self.trucks_panel = self._build_trucks_panel()
+        self.panel_container.addWidget(self.trucks_panel)
 
     def _make_vertical_button(self, text: str) -> QtWidgets.QToolButton:
         btn = QtWidgets.QToolButton(self)
@@ -123,6 +134,9 @@ class LeftSidebar(QtWidgets.QWidget, TranslatableMixin):
             elif panel_type == "loads":
                 self.panel_container.setCurrentWidget(self.loads_panel)
                 current_panel_width = self.loads_panel_width
+            elif panel_type == "trucks":
+                self.panel_container.setCurrentWidget(self.trucks_panel)
+                current_panel_width = self.panel_width
 
             self.panel_container.setFixedWidth(current_panel_width)
             self.panel_container.show()
@@ -136,6 +150,7 @@ class LeftSidebar(QtWidgets.QWidget, TranslatableMixin):
         self.btn_truck.setChecked(self.active_panel == "truck")
         self.btn_boxes.setChecked(self.active_panel == "boxes")
         self.btn_loads.setChecked(self.active_panel == "loads")
+        self.btn_trucks.setChecked(self.active_panel == "trucks")
 
     def _build_truck_panel(self) -> QtWidgets.QWidget:
         """Панель настроек прицепа (существующая логика)"""
@@ -221,8 +236,8 @@ class LeftSidebar(QtWidgets.QWidget, TranslatableMixin):
         self.btn_close.setStyleSheet(radio_style)
         v.addWidget(self.btn_open)
         v.addWidget(self.btn_close)
-        self.btn_open.toggled.connect(lambda on: on and self._set_tent_alpha(0.0))
-        self.btn_close.toggled.connect(lambda on: on and self._set_tent_alpha(0.3))
+        self.btn_open.toggled.connect(lambda on: on and self._set_tent_state(0.0, True))
+        self.btn_close.toggled.connect(lambda on: on and self._set_tent_state(0.3, False))
         lay.addWidget(self.tent_widget)
 
         # Presets section
@@ -445,6 +460,36 @@ class LeftSidebar(QtWidgets.QWidget, TranslatableMixin):
 
         return w
 
+    def _build_trucks_panel(self) -> QtWidgets.QWidget:
+        w = QtWidgets.QWidget()
+        w.setObjectName("TrucksPanel")
+        lay = QtWidgets.QVBoxLayout(w)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
+        self.truck_management = TruckManagementWidget(self.units_manager, self.get_app3d, w)
+        lay.addWidget(self.truck_management)
+        
+        # Подключаем к PandaWidget когда он готов
+        QtCore.QTimer.singleShot(2000, self._connect_truck_management_to_panda)
+        
+        return w
+
+    def _connect_truck_management_to_panda(self):
+        """Подключить управление грузовиками к PandaWidget"""
+        try:
+            app = self._app3d()
+            if app and hasattr(app, 'panda_widget') and app.panda_widget:
+                app.panda_widget.set_truck_management_widget(self.truck_management)
+                # Инициализируем отображение текущего грузовика
+                self.truck_management._publish_truck_info_to_main()
+            else:
+                # Повторяем попытку через секунду
+                QtCore.QTimer.singleShot(1000, self._connect_truck_management_to_panda)
+        except Exception as e:
+            print(f"Error connecting truck management to panda: {e}")
+            # Повторяем попытку через секунду
+            QtCore.QTimer.singleShot(1000, self._connect_truck_management_to_panda)
+
     def get_box_manager(self):
         if hasattr(self, 'box_management'):
             return self.box_management.get_box_manager()
@@ -466,7 +511,7 @@ class LeftSidebar(QtWidgets.QWidget, TranslatableMixin):
         self._switch_truck(w, h, d)
 
     def _reset_defaults(self):
-        self._set_tent_alpha(0.0)
+        self._set_tent_state(0.0, True)
         self._switch_truck(1650, 260, 245)
 
     def toggle_tent(self):
@@ -504,10 +549,23 @@ class LeftSidebar(QtWidgets.QWidget, TranslatableMixin):
         if app:
             app.set_tent_alpha(a)
 
+    def _set_tent_state(self, alpha: float, is_open: bool):
+        app = self._app3d()
+        if app:
+            app.set_tent_alpha(alpha)
+            if hasattr(app, 'panda_widget') and app.panda_widget:
+                truck_manager = app.panda_widget.get_truck_manager()
+                if truck_manager:
+                    truck_manager.set_tent_state_current(alpha, is_open)
+
     def _switch_truck(self, w: int, h: int, d: int):
         app = self._app3d()
         if app:
             app.switch_truck(w, h, d)
+            if hasattr(app, 'panda_widget') and app.panda_widget:
+                truck_manager = app.panda_widget.get_truck_manager()
+                if truck_manager:
+                    truck_manager.set_size_current(w, h, d)
 
     def _update_units_display(self):
         """Обновляет отображение единиц измерения в полях ввода"""
@@ -519,10 +577,54 @@ class LeftSidebar(QtWidgets.QWidget, TranslatableMixin):
         for ed in (self.ed_w, self.ed_h, self.ed_d):
             ed.setPlaceholderText(symbol)
 
+    def _try_connect_truck_manager(self):
+        app = self._app3d()
+        if app and hasattr(app, 'panda_widget') and app.panda_widget:
+            truck_manager = app.panda_widget.get_truck_manager()
+            if truck_manager:
+                truck_manager.add_on_changed(self._on_truck_changed)
+                self._update_truck_settings()
+            else:
+                QtCore.QTimer.singleShot(1000, self._try_connect_truck_manager)
+        else:
+            QtCore.QTimer.singleShot(1000, self._try_connect_truck_manager)
+
+    def _on_truck_changed(self):
+        self._update_truck_settings()
+
+    def _update_truck_settings(self):
+        app = self._app3d()
+        if not app or not hasattr(app, 'panda_widget') or not app.panda_widget:
+            return
+        
+        truck_manager = app.panda_widget.get_truck_manager()
+        if not truck_manager:
+            return
+        
+        current = truck_manager.get_current()
+        
+        # Обновляем поля ввода размеров в пользовательских единицах
+        if hasattr(self, 'ed_w') and hasattr(self, 'ed_h') and hasattr(self, 'ed_d'):
+            w_user = self.units_manager.from_internal_distance(current.width)
+            h_user = self.units_manager.from_internal_distance(current.height)
+            d_user = self.units_manager.from_internal_distance(current.depth)
+            
+            self.ed_w.setText(str(round(w_user, 1)))
+            self.ed_h.setText(str(round(h_user, 1)))
+            self.ed_d.setText(str(round(d_user, 1)))
+        
+        # Обновляем состояние тента
+        if hasattr(self, 'btn_open') and hasattr(self, 'btn_close'):
+            if current.tent_open:
+                self.btn_open.setChecked(True)
+            else:
+                self.btn_close.setChecked(True)
+
     def retranslate_ui(self):
         self.btn_truck.setText(tr("Кузов"))
         self.btn_boxes.setText(tr("Коробки"))
         self.btn_loads.setText(tr("Нагрузки"))
+        self.btn_trucks.setText(tr("Грузовики"))
         
         if hasattr(self, 'title'):
             self.title.setText(tr("Настройки прицепа"))

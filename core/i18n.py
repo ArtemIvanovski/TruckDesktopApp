@@ -1,6 +1,8 @@
 import json
 import os
 from typing import Dict, Optional
+from utils.settings_manager import SettingsManager
+from utils.setting_deploy import get_resource_path
 from PyQt5.QtCore import QObject, pyqtSignal
 
 
@@ -30,24 +32,18 @@ class TranslationManager(QObject):
         self._initialized = True
     
     def _load_settings(self):
-        if os.path.exists(self._settings_file):
-            try:
-                with open(self._settings_file, 'r', encoding='utf-8') as f:
-                    settings = json.load(f)
-                self._current_language = settings.get('language', 'ru')
-            except:
-                pass
+        mgr = SettingsManager()
+        settings = mgr.get_section('language')
+        self._current_language = settings.get('language', 'ru')
     
     def _save_settings(self):
-        settings = {'language': self._current_language}
-        with open(self._settings_file, 'w', encoding='utf-8') as f:
-            json.dump(settings, f)
+        SettingsManager().update_section('language', {'language': self._current_language})
     
     def _load_language(self, language: str):
         if language in self._translations_cache:
             return
         
-        file_path = f'locales/{language}.json'
+        file_path = get_resource_path(f'locales/{language}.json')
         if os.path.exists(file_path):
             try:
                 with open(file_path, 'r', encoding='utf-8') as f:

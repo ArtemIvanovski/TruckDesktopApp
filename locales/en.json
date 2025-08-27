@@ -155,7 +155,7 @@
     "вращение камеры": "camera rotation",
     "масштабирование (приближение/отдаление)": "zooming (zoom in/out)",
     "переключить полный экран": "toggle fullscreen",
-    "переключить полный экран (альтернативная)": "toggle fullscreen (alternative)",
+    "переключитполный экран (альтернативная)": "toggle fullscreen (alternative)",
     "выйти из полного экрана": "exit fullscreen",
     "быстрые виды (сверху, слева, справа)": "quick views (top, left, right)",
     "сбросить вид": "reset view",
@@ -265,5 +265,18 @@
     "Вращать вперед (вертикально)": "Rotate Forward (Vertical)",
     "Вращать назад (вертикально)": "Rotate Backward (Vertical)",
     "Вращать влево (горизонтально)": "Rotate Left (Horizontal)",
-    "Вращать вправо (горизонтально)": "Rotate Right (Horizontal)"
+    "Вращать вправо (горизонтально)": "Rotate Right (Horizontal)",
+
+    "Грузовики": "Trucks",
+    "Управление грузовиками": "Truck Management",
+    "Выбрать как текущий": "Select as Current",
+    "Готов к загрузке": "Ready for Loading",
+    "Готовность": "Readiness",
+    "Общий вес": "Total Weight",
+    "Удалить": "Delete",
+    "Грузовик 1": "Truck 1",
+    "Грузовик": "Truck",
+    "Название": "Name",
+    "Не готов к загрузке": "Not Ready for Loading",
+    "Не готов": "Not Ready"
 }

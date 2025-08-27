@@ -47,7 +47,16 @@
       45,
       0
     ],
-    "lighting_enabled": true
+    "lighting_enabled": true,
+    "grid_enabled": false,
+    "grid_opacity": 0.2,
+    "grid_color": [
+      1.0,
+      1.0,
+      0.0
+    ],
+    "grid_spacing_x_cm": 100,
+    "grid_spacing_y_cm": 100
   },
   "auth": {
     "enabled": false,

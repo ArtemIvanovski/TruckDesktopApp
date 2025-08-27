@@ -46,6 +46,8 @@ class GraphicsManager:
                 r, g, b = self.settings.truck_color
                 self._update_truck_model_color(self.app.lorry_model, r, g, b)
 
+            self._apply_grid()
+
             logger.info("All graphics settings applied successfully")
 
         except Exception as e:
@@ -224,6 +226,9 @@ class GraphicsManager:
         if any(key in kwargs for key in ['main_light_intensity', 'fill_light_intensity', 'lighting_enabled']):
             self.update_lighting()
 
+        if any(key in kwargs for key in ['grid_enabled', 'grid_opacity', 'grid_color', 'grid_spacing_x_cm', 'grid_spacing_y_cm']):
+            self._apply_grid()
+
         # Автосохранение настроек
         self.save_settings()
 
@@ -235,4 +240,50 @@ class GraphicsManager:
         self.apply_all_settings()
 
         # Сохранить сброшенные настройки
+        self.save_settings()
+
+    def _apply_grid(self):
+        try:
+            if not hasattr(self.app, 'scene') or not self.app.scene:
+                return
+            s = self.settings
+            if hasattr(self.app.scene, 'update_grid'):
+                self.app.scene.update_grid(
+                    enabled=bool(s.grid_enabled),
+                    color=tuple(s.grid_color),
+                    opacity=float(s.grid_opacity),
+                    spacing_x_cm=int(s.grid_spacing_x_cm),
+                    spacing_y_cm=int(s.grid_spacing_y_cm)
+                )
+        except Exception as e:
+            logger.error(f"Failed to apply grid settings: {e}")
+
+    def set_grid_enabled(self, enabled: bool):
+        self.settings.grid_enabled = bool(enabled)
+        self._apply_grid()
+        self.save_settings()
+
+    def set_grid_opacity(self, opacity: float):
+        self.settings.grid_opacity = max(0.0, min(1.0, float(opacity)))
+        self._apply_grid()
+        self.save_settings()
+
+    def set_grid_color(self, r: float, g: float, b: float):
+        self.settings.grid_color = (float(r), float(g), float(b))
+        self._apply_grid()
+        self.save_settings()
+
+    def set_grid_spacing(self, spacing_x_cm: int, spacing_y_cm: int):
+        self.settings.grid_spacing_x_cm = max(1, int(spacing_x_cm))
+        self.settings.grid_spacing_y_cm = max(1, int(spacing_y_cm))
+        self._apply_grid()
+        self.save_settings()
+
+    def reset_grid_settings(self):
+        self.settings.grid_enabled = False
+        self.settings.grid_opacity = 0.3
+        self.settings.grid_color = (0.2, 0.6, 1.0)
+        self.settings.grid_spacing_x_cm = 10
+        self.settings.grid_spacing_y_cm = 10
+        self._apply_grid()
         self.save_settings()

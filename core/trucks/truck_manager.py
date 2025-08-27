@@ -73,6 +73,7 @@ class TruckManager:
             return
         if self.app3d:
             self._capture_boxes_to_current()
+        old_index = self.current_index
         self.current_index = index
         if self.app3d:
             self._apply_current_to_scene()

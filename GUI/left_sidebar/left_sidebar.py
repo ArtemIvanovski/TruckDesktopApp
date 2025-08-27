@@ -15,6 +15,7 @@ class LeftSidebar(QtWidgets.QWidget, TranslatableMixin):
         self.units_manager = units_manager
         self.setObjectName("LeftSidebar")
         self.active_panel = None
+        self._truck_manager = None
         self._setup_ui()
         
         # Подключаемся к сигналу изменения единиц измерения
@@ -584,10 +585,33 @@ class LeftSidebar(QtWidgets.QWidget, TranslatableMixin):
             if truck_manager:
                 truck_manager.add_on_changed(self._on_truck_changed)
                 self._update_truck_settings()
+                self._truck_manager = truck_manager
             else:
                 QtCore.QTimer.singleShot(1000, self._try_connect_truck_manager)
         else:
             QtCore.QTimer.singleShot(1000, self._try_connect_truck_manager)
+
+    def _save_current_truck_ui_settings(self):
+        if not self._truck_manager:
+            return
+        
+        current = self._truck_manager.get_current()
+        
+        if hasattr(self, 'btn_open') and hasattr(self, 'btn_close'):
+            current.tent_open = self.btn_open.isChecked()
+            current.tent_alpha = 0.0 if current.tent_open else 0.3
+        
+        if hasattr(self, 'ed_w') and hasattr(self, 'ed_h') and hasattr(self, 'ed_d'):
+            try:
+                w_user = float(self.ed_w.text())
+                h_user = float(self.ed_h.text())
+                d_user = float(self.ed_d.text())
+                
+                current.width = int(self.units_manager.to_internal_distance(w_user))
+                current.height = int(self.units_manager.to_internal_distance(h_user))
+                current.depth = int(self.units_manager.to_internal_distance(d_user))
+            except:
+                pass
 
     def _on_truck_changed(self):
         self._update_truck_settings()

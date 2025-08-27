@@ -2,6 +2,7 @@ from PyQt5 import QtWidgets, QtGui
 
 from GUI.settings_window.camera_control_widget import CameraControlWidget
 from GUI.settings_window.graphics_widget import GraphicsWidget
+from GUI.settings_window.grid_widget import GridWidget
 from utils.setting_deploy import get_resource_path
 from core.i18n import tr, translation_manager, TranslatableMixin
 
@@ -191,6 +192,7 @@ class SettingsWindow(QtWidgets.QDialog, TranslatableMixin):
         self.categories = [
             tr("Управление"),
             tr("Графика"),
+            tr("Сетка"),
             tr("Единицы"),
             tr("Общие")
         ]
@@ -227,11 +229,13 @@ class SettingsWindow(QtWidgets.QDialog, TranslatableMixin):
 
         camera_widget = CameraControlWidget(self.camera, self)
         graphics_widget = GraphicsWidget(self.graphics_manager, self)
+        grid_widget = GridWidget(self.graphics_manager, self)
         units_widget = UnitsWidget(self.units_manager, self)
         general_widget = GeneralWidget(self)
 
         self.content_stack.addWidget(camera_widget)
         self.content_stack.addWidget(graphics_widget)
+        self.content_stack.addWidget(grid_widget)
         self.content_stack.addWidget(units_widget)
         self.content_stack.addWidget(general_widget)
 
@@ -294,6 +298,12 @@ class SettingsWindow(QtWidgets.QDialog, TranslatableMixin):
             'цвет': 'Графика',
             'фон': 'Графика',
             'тягач': 'Графика',
+            'сетка': 'Сетка',
+            'прозрачность': 'Сетка',
+            'ячейки': 'Сетка',
+            'размер': 'Сетка',
+            'отображение': 'Сетка',
+            'grid': 'Сетка',
             'единицы': 'Единицы',
             'измерения': 'Единицы',
             'сантиметры': 'Единицы',
@@ -347,7 +357,8 @@ class SettingsWindow(QtWidgets.QDialog, TranslatableMixin):
         
         self.categories = [
             tr("Управление"),
-            tr("Графика"), 
+            tr("Графика"),
+            tr("Сетка"), 
             tr("Единицы"),
             tr("Общие")
         ]

@@ -141,6 +141,8 @@ class TruckManagementWidget(QtWidgets.QWidget, TranslatableMixin):
         self._rebuild_trucks_list()
         # Публикуем в оверлей текущее состояние при инициализации
         self._publish_truck_info_to_main()
+        # Синхронизируемся с главным менеджером грузовиков
+        self._sync_with_truck_manager()
 
     def _rebuild_trucks_list(self):
         """Перестроить список грузовиков"""
@@ -375,13 +377,10 @@ class TruckManagementWidget(QtWidgets.QWidget, TranslatableMixin):
                 else:
                     widget.details_widget.hide()
                 
-                # Обновляем состояние радиокнопки
                 widget.radio_btn.setChecked(index == self.current_truck_index)
                 
-                # Обновляем состояние чекбокса готовности
                 widget.ready_checkbox.setChecked(truck.get('ready', False))
                 
-                # Обновляем название
                 widget.name_edit.setText(truck.get('name', tr('Грузовик')))
                 
                 # Обновляем информацию
@@ -407,6 +406,12 @@ class TruckManagementWidget(QtWidgets.QWidget, TranslatableMixin):
                 widget = self.trucks_layout.itemAt(i).widget()
                 if hasattr(widget, 'radio_btn'):
                     widget.radio_btn.setChecked(widget.truck_index == index)
+            
+            # Синхронизируем с главным менеджером
+            truck_manager = self._get_truck_manager()
+            if truck_manager:
+                truck_manager.select_index(index)
+            
             # Публикуем изменения
             self._publish_truck_info_to_main()
 
@@ -415,6 +420,12 @@ class TruckManagementWidget(QtWidgets.QWidget, TranslatableMixin):
         if index < len(self.trucks):
             self.trucks[index]['ready'] = checked
             self._save_settings()
+            
+            # Синхронизируем с главным менеджером
+            truck_manager = self._get_truck_manager()
+            if truck_manager and index < len(truck_manager.trucks):
+                truck_manager.trucks[index].ready = checked
+            
             # Публикуем изменения
             self._publish_truck_info_to_main()
 
@@ -423,6 +434,12 @@ class TruckManagementWidget(QtWidgets.QWidget, TranslatableMixin):
         if index < len(self.trucks) and new_name.strip():
             self.trucks[index]['name'] = new_name.strip()
             self._save_settings()
+            
+            # Синхронизируем с главным менеджером
+            truck_manager = self._get_truck_manager()
+            if truck_manager and index < len(truck_manager.trucks):
+                truck_manager.trucks[index].name = new_name.strip()
+            
             # Обновляем текст кнопки
             self._update_truck_widget(index)
             # Публикуем изменения
@@ -448,6 +465,13 @@ class TruckManagementWidget(QtWidgets.QWidget, TranslatableMixin):
             'weight': 0
         }
         self.trucks.append(new_truck)
+        
+        # Синхронизируем с главным менеджером
+        truck_manager = self._get_truck_manager()
+        if truck_manager:
+            truck_manager.add_truck()
+            truck_manager.trucks[-1].name = new_truck['name']
+        
         self._rebuild_trucks_list()
         # Переходим на добавленный грузовик и публикуем
         self.current_truck_index = len(self.trucks) - 1
@@ -480,6 +504,11 @@ class TruckManagementWidget(QtWidgets.QWidget, TranslatableMixin):
                     new_expanded.add(idx)
             self.expanded_trucks = new_expanded
             
+            # Синхронизируем с главным менеджером
+            truck_manager = self._get_truck_manager()
+            if truck_manager:
+                truck_manager.remove_current_truck()
+            
             # No persistence of list/selection
             self._rebuild_trucks_list()
             
@@ -499,6 +528,23 @@ class TruckManagementWidget(QtWidgets.QWidget, TranslatableMixin):
         if hasattr(app, 'panda_widget') and app.panda_widget:
             return app.panda_widget.get_truck_manager()
         return None
+
+    def _sync_with_truck_manager(self):
+        """Синхронизировать с главным менеджером грузовиков"""
+        truck_manager = self._get_truck_manager()
+        if not truck_manager:
+            QtCore.QTimer.singleShot(500, self._sync_with_truck_manager)
+            return
+        
+        truck_manager.trucks.clear()
+        for i, truck_data in enumerate(self.trucks):
+            from core.trucks.truck_model import TruckModel
+            truck = TruckModel(i + 1, truck_data['name'], 1650, 260, 245)
+            truck.ready = truck_data.get('ready', False)
+            truck_manager.trucks.append(truck)
+        
+        truck_manager.current_index = self.current_truck_index
+        truck_manager._notify()
 
     def retranslate_ui(self):
         """Обновить переводы"""

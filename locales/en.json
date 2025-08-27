@@ -278,5 +278,19 @@
     "Грузовик": "Truck",
     "Название": "Name",
     "Не готов к загрузке": "Not Ready for Loading",
-    "Не готов": "Not Ready"
+    "Не готов": "Not Ready",
+    
+    "Сетка": "Grid",
+    "Отображение сетки": "Grid Display",
+    "Включить сетку": "Enable Grid",
+    "Внешний вид": "Appearance",
+    "Прозрачность": "Opacity",
+    "Цвет сетки": "Grid Color",
+    "Размеры ячеек": "Cell Sizes",
+    "Размер по X (см)": "X Size (cm)",
+    "Размер по Y (см)": "Y Size (cm)",
+    "Выберите цвет сетки": "Choose Grid Color",
+    "Настройки сетки применены успешно!": "Grid settings applied successfully!",
+    "Вы уверены, что хотите сбросить все настройки сетки до заводских?": "Are you sure you want to reset all grid settings to factory defaults?",
+    "Настройки сетки сброшены до заводских!": "Grid settings reset to factory defaults!"
 }

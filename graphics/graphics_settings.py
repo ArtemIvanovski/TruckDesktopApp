@@ -81,6 +81,13 @@ class GraphicsSettings:
         # Включено ли освещение
         self.lighting_enabled = True
 
+        # Сетка
+        self.grid_enabled = False
+        self.grid_opacity = 0.3
+        self.grid_color = (0.2, 0.6, 1.0)
+        self.grid_spacing_x_cm = 10
+        self.grid_spacing_y_cm = 10
+
     def to_dict(self):
         """Сериализация настроек в словарь"""
         return {
@@ -91,7 +98,12 @@ class GraphicsSettings:
             'fill_light_intensity': self.fill_light_intensity,
             'main_light_hpr': self.main_light_hpr,
             'fill_light_hpr': self.fill_light_hpr,
-            'lighting_enabled': self.lighting_enabled
+            'lighting_enabled': self.lighting_enabled,
+            'grid_enabled': self.grid_enabled,
+            'grid_opacity': self.grid_opacity,
+            'grid_color': self.grid_color,
+            'grid_spacing_x_cm': self.grid_spacing_x_cm,
+            'grid_spacing_y_cm': self.grid_spacing_y_cm
         }
 
     def from_dict(self, data):

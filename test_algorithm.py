@@ -8,7 +8,7 @@ import sys
 
 
 def main():
-    print("Запуск тестера алгоритма упаковки...")
+    print("...")
     print()
 
     try:

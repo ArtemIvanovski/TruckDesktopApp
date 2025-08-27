@@ -18,6 +18,7 @@ class TruckScene:
         self.floor = None
         self.ground = None
         self.tent_closed = False
+        self.grid_node = None
 
     def build(self):
         self._create_truck_box()
@@ -186,6 +187,54 @@ class TruckScene:
         self.ground.setColor(0.2, 0.2, 0.2, 0.0)
         # Отключаем освещение для ground
         self.ground.setLightOff(1)
+
+    def _remove_grid(self):
+        if self.grid_node:
+            try:
+                self.grid_node.removeNode()
+            except Exception:
+                pass
+            self.grid_node = None
+
+    def update_grid(self, enabled: bool, color, opacity: float, spacing_x_cm: int, spacing_y_cm: int):
+        try:
+            self._remove_grid()
+            if not enabled:
+                return
+            from panda3d.core import LineSegs, TransparencyAttrib
+            segs = LineSegs()
+            segs.setThickness(1.0)
+            r, g, b = color
+            a = max(0.0, min(1.0, float(opacity)))
+            segs.setColor(float(r), float(g), float(b), float(a))
+
+            extent = 2000
+            z = 135.0 + 0.05
+            step_x = max(1, int(spacing_x_cm))
+            step_y = max(1, int(spacing_y_cm))
+
+            x_min, x_max = -extent, extent
+            y_min, y_max = -extent, extent
+
+            y = y_min - (y_min % step_y)
+            while y <= y_max:
+                segs.moveTo(x_min, y, z)
+                segs.drawTo(x_max, y, z)
+                y += step_y
+
+            x = x_min - (x_min % step_x)
+            while x <= x_max:
+                segs.moveTo(x, y_min, z)
+                segs.drawTo(x, y_max, z)
+                x += step_x
+
+            node = segs.create()
+            self.grid_node = self.app.render.attachNewNode(node)
+            self.grid_node.setTransparency(TransparencyAttrib.MAlpha)
+            self.grid_node.setLightOff(1)
+            self.grid_node.setDepthWrite(False)
+        except Exception:
+            self._remove_grid()
 
     def set_tent_alpha(self, a: float):
         self.tent_closed = a >= 0.29

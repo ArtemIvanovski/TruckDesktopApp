@@ -3,6 +3,7 @@ from PyQt5 import QtWidgets, QtGui
 from GUI.settings_window.camera_control_widget import CameraControlWidget
 from GUI.settings_window.graphics_widget import GraphicsWidget
 from GUI.settings_window.grid_widget import GridWidget
+from GUI.settings_window.customization_widget import CustomizationWidget
 from utils.setting_deploy import get_resource_path
 from core.i18n import tr, translation_manager, TranslatableMixin
 
@@ -120,6 +121,7 @@ class SettingsWindow(QtWidgets.QDialog, TranslatableMixin):
         self.camera = camera
         self.graphics_manager = graphics_manager
         self.units_manager = units_manager
+        self.truck_app = None
         self.search_index = {}
         self.setWindowIcon(QtGui.QIcon(get_resource_path("assets/icon/logo.png")))
         self.setModal(True)
@@ -194,6 +196,7 @@ class SettingsWindow(QtWidgets.QDialog, TranslatableMixin):
             tr("Графика"),
             tr("Сетка"),
             tr("Единицы"),
+            tr("Кастомизация"),
             tr("Общие")
         ]
 
@@ -231,12 +234,16 @@ class SettingsWindow(QtWidgets.QDialog, TranslatableMixin):
         graphics_widget = GraphicsWidget(self.graphics_manager, self)
         grid_widget = GridWidget(self.graphics_manager, self)
         units_widget = UnitsWidget(self.units_manager, self)
+        customization_widget = CustomizationWidget(self)
         general_widget = GeneralWidget(self)
+        
+        self.customization_widget = customization_widget
 
         self.content_stack.addWidget(camera_widget)
         self.content_stack.addWidget(graphics_widget)
         self.content_stack.addWidget(grid_widget)
         self.content_stack.addWidget(units_widget)
+        self.content_stack.addWidget(customization_widget)
         self.content_stack.addWidget(general_widget)
 
         right_layout.addWidget(self.content_stack)
@@ -315,6 +322,12 @@ class SettingsWindow(QtWidgets.QDialog, TranslatableMixin):
             'стоуны': 'Единицы',
             'расстояние': 'Единицы',
             'вес': 'Единицы',
+            'логотип': 'Кастомизация',
+            'компания': 'Кастомизация',
+            'кастомизация': 'Кастомизация',
+            'брендинг': 'Кастомизация',
+            'позиция': 'Кастомизация',
+            'размер': 'Кастомизация',
             'автосохранение': 'Общие',
             'резервные': 'Общие',
             'копии': 'Общие',
@@ -360,6 +373,7 @@ class SettingsWindow(QtWidgets.QDialog, TranslatableMixin):
             tr("Графика"),
             tr("Сетка"), 
             tr("Единицы"),
+            tr("Кастомизация"),
             tr("Общие")
         ]
         
@@ -371,6 +385,11 @@ class SettingsWindow(QtWidgets.QDialog, TranslatableMixin):
         if 0 <= current_index < len(self.categories):
             self.category_list.setCurrentRow(current_index)
             self.title_label.setText(self.categories[current_index])
+
+    def set_truck_app(self, truck_app):
+        self.truck_app = truck_app
+        if hasattr(self, 'customization_widget'):
+            self.customization_widget.set_truck_app(truck_app)
 
 
 def get_reset_button_style():

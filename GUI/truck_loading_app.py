@@ -1,4 +1,5 @@
 import logging
+
 try:
     import panda3d_gltf
 except Exception:
@@ -9,6 +10,8 @@ import sys
 import traceback
 from typing import Optional, Tuple
 
+from core.error_management import ErrorReportingMixin, safe_method
+from core.exceptions import ErrorCategory, ErrorSeverity
 
 from direct.showbase.ShowBase import ShowBase
 from panda3d.core import Material, Point3, Point2, Vec3, TextNode
@@ -21,6 +24,7 @@ from config.config import BACKGROUND_COLOR, WHEEL_CABIN_HEIGHT
 from core.camera import ArcCamera
 from core.truck import TruckScene
 from graphics.graphics_manager import GraphicsManager
+from utils.settings_manager import SettingsManager
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -37,7 +41,7 @@ def check_gltf_support():
         return False
 
 
-class TruckLoadingApp(ShowBase):
+class TruckLoadingApp(ShowBase, ErrorReportingMixin):
     def __init__(self,
                  window_type: str = 'onscreen',
                  embed_parent_window: Optional[int] = None,
@@ -46,6 +50,8 @@ class TruckLoadingApp(ShowBase):
         self.graphics_manager = None
         try:
             logger.info("Starting application...")
+            self.scene_initialized = False
+            self.models_loaded = False
             if embed_parent_window is not None or window_type == 'none':
                 ShowBase.__init__(self, windowType='none')
             else:
@@ -84,7 +90,15 @@ class TruckLoadingApp(ShowBase):
 
             logger.info("Loading models...")
             self.load_models()
+            self.models_loaded = True
             logger.info("Models loaded")
+
+            logger.info("Applying company logo...")
+            self.load_company_logo()
+            logger.info("Company logo applied")
+
+            self.scene_initialized = True
+            logger.info("Scene initialization complete")
 
             logger.info("Setting up controls...")
             self.setup_controls()
@@ -104,6 +118,25 @@ class TruckLoadingApp(ShowBase):
             logger.error(f"Error during initialization: {e}")
             logger.error(traceback.format_exc())
             sys.exit(1)
+
+    def ensure_models_loaded(self):
+        if not self.models_loaded:
+            logger.info("Ensuring models are loaded...")
+            max_wait = 50
+            wait_count = 0
+            while not self.models_loaded and wait_count < max_wait:
+                self.taskMgr.step()
+                wait_count += 1
+
+    def wait_for_scene_ready(self):
+        if not self.scene_initialized:
+            logger.info("Waiting for scene to be ready...")
+            max_wait = 100
+            wait_count = 0
+            while not self.scene_initialized and wait_count < max_wait:
+                self.taskMgr.step()
+                wait_count += 1
+
         self.marking_size_factor = 0.20
         self.marking_padding_factor = 0.25
         self.marking_raster_scale = 3
@@ -115,6 +148,33 @@ class TruckLoadingApp(ShowBase):
         self._drag_last_mouse = Point2(0, 0)
         self._drag_last_valid_pos = None
         self.ground_level = 135.0
+
+    @safe_method(
+        component="TruckLoadingApp",
+        category=ErrorCategory.SYSTEM,
+        severity=ErrorSeverity.LOW,
+        fallback=None
+    )
+    def _load_bold_font(self):
+        from utils.setting_deploy import get_resource_path
+        import os
+        font_path = get_resource_path('assets/fonts/NotoSans-Bold.ttf')
+        if os.path.exists(font_path):
+            font_path_unix = font_path.replace('\\', '/').replace('E:/', '/e/')
+            return self.loader.loadFont(font_path_unix)
+        return None
+
+    @safe_method(
+        component="TruckLoadingApp",
+        category=ErrorCategory.GRAPHICS,
+        severity=ErrorSeverity.LOW,
+        suppress_errors=True
+    )
+    def _apply_texture_filters(self, texture):
+        from panda3d.core import Texture
+        texture.setMinfilter(Texture.FTLinearMipmapLinear)
+        texture.setMagfilter(Texture.FTLinear)
+        texture.setAnisotropicDegree(2)
 
     def create_box_wireframe(self, box_node, width, height, depth):
         from panda3d.core import LineSegs
@@ -176,12 +236,18 @@ class TruckLoadingApp(ShowBase):
             return tex
 
         faces = [
-            ("front",  lambda c, r: (-width/2 + padding + size/2 + c*(size+padding), -depth/2 - 0.5,  height/2 - padding - size/2 - r*(size+padding)), (0,   0,   0)),
-            ("back",   lambda c, r: ( width/2 - padding - size/2 - c*(size+padding),  depth/2 + 0.5,  height/2 - padding - size/2 - r*(size+padding)), (180, 0,   0)),
-            ("left",   lambda c, r: (-width/2 - 0.5, -depth/2 + padding + size/2 + c*(size+padding), height/2 - padding - size/2 - r*(size+padding)), (90,  0,   0)),
-            ("right",  lambda c, r: ( width/2 + 0.5,  depth/2 - padding - size/2 - c*(size+padding), height/2 - padding - size/2 - r*(size+padding)), (-90, 0,   0)),
-            ("top",    lambda c, r: (-width/2 + padding + size/2 + c*(size+padding), 0,               depth/2 - padding - size/2 - r*(size+padding)), (0,  -90, 0)),
-            ("bottom", lambda c, r: (-width/2 + padding + size/2 + c*(size+padding), 0,              -depth/2 + padding + size/2 + r*(size+padding)), (0,   90, 0)),
+            ("front", lambda c, r: (-width / 2 + padding + size / 2 + c * (size + padding), -depth / 2 - 0.5,
+                                    height / 2 - padding - size / 2 - r * (size + padding)), (0, 0, 0)),
+            ("back", lambda c, r: (width / 2 - padding - size / 2 - c * (size + padding), depth / 2 + 0.5,
+                                   height / 2 - padding - size / 2 - r * (size + padding)), (180, 0, 0)),
+            ("left", lambda c, r: (-width / 2 - 0.5, -depth / 2 + padding + size / 2 + c * (size + padding),
+                                   height / 2 - padding - size / 2 - r * (size + padding)), (90, 0, 0)),
+            ("right", lambda c, r: (width / 2 + 0.5, depth / 2 - padding - size / 2 - c * (size + padding),
+                                    height / 2 - padding - size / 2 - r * (size + padding)), (-90, 0, 0)),
+            ("top", lambda c, r: (-width / 2 + padding + size / 2 + c * (size + padding), 0,
+                                  depth / 2 - padding - size / 2 - r * (size + padding)), (0, -90, 0)),
+            ("bottom", lambda c, r: (-width / 2 + padding + size / 2 + c * (size + padding), 0,
+                                     -depth / 2 + padding + size / 2 + r * (size + padding)), (0, 90, 0)),
         ]
 
         per_face = min(len(markings), 4)
@@ -205,13 +271,10 @@ class TruckLoadingApp(ShowBase):
                     x, y, z = pos_fn(col, row)
                     node.setPos(x, y, z)
                     node.setHpr(*hpr)
-                    try:
-                        from panda3d.core import Texture
-                        texture.setMinfilter(Texture.FTLinearMipmapLinear)
-                        texture.setMagfilter(Texture.FTLinear)
-                        texture.setAnisotropicDegree(2)
-                    except Exception:
-                        pass
+                    self.safe_execute(
+                        lambda: self._apply_texture_filters(texture),
+                        fallback=lambda: None
+                    )
                 except Exception as e:
                     logging.warning(f"[Marking] Failed '{marking}' on {face_name}: {e}")
 
@@ -300,7 +363,7 @@ class TruckLoadingApp(ShowBase):
 
         # Создаем изображение с цветным кругом
         pnm_image = PNMImage(64, 64, 4)  # 4 канала (RGBA)
-        
+
         # Заполняем прозрачным фоном (правильно вызываем fill для RGBA)
         for y in range(64):
             for x in range(64):
@@ -309,13 +372,13 @@ class TruckLoadingApp(ShowBase):
         # Рисуем цветной круг
         center_x, center_y = 32, 32
         radius = 25
-        
+
         for y in range(64):
             for x in range(64):
                 dx = x - center_x
                 dy = y - center_y
                 distance = (dx * dx + dy * dy) ** 0.5
-                
+
                 if distance <= radius:
                     # Внутри круга - устанавливаем цвет маркировки
                     pnm_image.setXelA(x, y, r, g, b, 1.0)
@@ -326,7 +389,7 @@ class TruckLoadingApp(ShowBase):
         texture = Texture()
         texture.load(pnm_image)
         texture.setFormat(Texture.FRgba)
-        
+
         logging.info(f"Created fallback texture for marking: {marking_name} with color {color}")
         return texture
 
@@ -337,11 +400,10 @@ class TruckLoadingApp(ShowBase):
         props.setSize(1280, 800)
         self.win.requestProperties(props)
         self.setBackgroundColor(*BACKGROUND_COLOR)
-        try:
-            if not getattr(self, 'mouseWatcherNode', None):
-                self.setupMouse(self.win)
-        except Exception:
-            pass
+        self.safe_execute(
+            lambda: self.setupMouse(self.win) if not getattr(self, 'mouseWatcherNode', None) else None,
+            fallback=lambda: None
+        )
 
     def _open_embedded_window(self, parent_handle: int, size: Optional[Tuple[int, int]]):
         props = WindowProperties()
@@ -355,11 +417,10 @@ class TruckLoadingApp(ShowBase):
         logger.info(f"[Panda] openWindow in parent={parent_handle}, size={props.getXSize()}x{props.getYSize()}")
         self.win = self.openWindow(props=props)
         self.setBackgroundColor(*BACKGROUND_COLOR)
-        try:
-            if not getattr(self, 'mouseWatcherNode', None):
-                self.setupMouse(self.win)
-        except Exception:
-            pass
+        self.safe_execute(
+            lambda: self.setupMouse(self.win) if not getattr(self, 'mouseWatcherNode', None) else None,
+            fallback=lambda: None
+        )
 
     def resize_window(self, width: int, height: int):
         if self.win:
@@ -367,6 +428,11 @@ class TruckLoadingApp(ShowBase):
             props.setOrigin(0, 0)
             props.setSize(int(width), int(height))
             self.win.requestProperties(props)
+            try:
+                if hasattr(self, 'company_logo_np') and self.company_logo_np:
+                    self._reposition_company_logo()
+            except Exception:
+                pass
 
     def create_3d_box_from_data(self, box_data, world_pos=None):
         """Создание 3D коробки точно как в content.html"""
@@ -386,7 +452,7 @@ class TruckLoadingApp(ShowBase):
         # Создаем узел коробки как в content.html (randomBox[mCyrcle])
         box_id = len(getattr(self, "scene_boxes", []))
         box_node = self.render.attachNewNode(f"randomBox{box_id}")
-        
+
         # Теги как в content.html
         box_node.setPythonTag('box_id', box_id)
         box_node.setPythonTag('truck_index', None)
@@ -416,27 +482,27 @@ class TruckLoadingApp(ShowBase):
         box_geom_np = box_node.attachNewNode(geom_node)
 
         import json
-        
+
         box_color_key = json.dumps([width, depth, height])
-        
+
         if not hasattr(self, 'box_colors'):
             self.box_colors = {}
-        
+
         if box_color_key not in self.box_colors:
             hash_val = hash(box_color_key) & 0x7FFFFFFF
             random.seed(hash_val)
             new_color = (random.random(), random.random(), random.random())
             self.box_colors[box_color_key] = new_color
-        
+
         box_color = self.box_colors[box_color_key]
         r, g, b = box_color
-        
+
         material = Material()
         material.setDiffuse(Vec4(0, 0, 0, 1.0))
         material.setSpecular(Vec4(0, 0, 0, 1.0))
         material.setEmission(Vec4(r, g, b, 1.0))
         material.setShininess(1.0)
-        
+
         box_geom_np.setMaterial(material)
         box_geom_np.setLightOff(1)
         box_geom_np.setColor(r, g, b, 1.0)
@@ -448,7 +514,7 @@ class TruckLoadingApp(ShowBase):
 
         from panda3d.core import CollisionNode, CollisionBox
         collision_node = CollisionNode('box_collision')
-        collision_node.addSolid(CollisionBox(Point3(0, 0, 0), width/2, depth/2, height/2))
+        collision_node.addSolid(CollisionBox(Point3(0, 0, 0), width / 2, depth / 2, height / 2))
         collision_node.setFromCollideMask(0)
         collision_node.setIntoCollideMask(1)
         collision_np = box_geom_np.attachNewNode(collision_node)
@@ -467,76 +533,76 @@ class TruckLoadingApp(ShowBase):
             self.create_box_markings(box_node=box_node, box_data=box_data, width=width, height=height, depth=depth)
         except Exception as e:
             logging.warning(f"Could not create markings for {label}: {e}")
-        
+
         logging.info(f"Successfully dropped box: {label}")
-        try:
-            self.update_side_loads()
-        except Exception:
-            pass
+        self.safe_execute(
+            self.update_side_loads,
+            fallback=lambda: None
+        )
         return box_node
-    
+
     def find_non_overlapping_position(self, start_x, start_y, start_z, box_width, box_height, box_depth):
         """Умный алгоритм размещения коробок перед грузовиком в сетке"""
-        
+
         min_gap = 20
         grid_step = 80
-        
+
         truck_front_y = self.truck_depth / 2
         placement_zone_y_start = truck_front_y + 150
         placement_zone_y_end = truck_front_y + 1000
         placement_zone_x_left = -800
         placement_zone_x_right = 800
         ground_level = 135
-        
+
         if not hasattr(self, 'scene_boxes') or not self.scene_boxes:
             safe_x = max(-400, min(400, start_x))
             safe_y = placement_zone_y_start + 100
             safe_z = ground_level
             return (safe_x, safe_y, safe_z)
-            
+
         max_stack_levels = 3
         test_positions = []
-        
+
         for level in range(max_stack_levels):
             level_z = ground_level + level * (150 + min_gap)
-            
+
             x_positions = list(range(int(placement_zone_x_left), int(placement_zone_x_right) + 1, grid_step))
             y_positions = list(range(int(placement_zone_y_start), int(placement_zone_y_end) + 1, grid_step))
-            
+
             grid_positions = []
             for x in x_positions:
                 for y in y_positions:
-                    distance = math.sqrt((x - start_x)**2 + (y - start_y)**2)
+                    distance = math.sqrt((x - start_x) ** 2 + (y - start_y) ** 2)
                     grid_positions.append((distance, x, y, level_z))
-            
+
             grid_positions.sort(key=lambda pos: pos[0])
-            
+
             for distance, x, y, z in grid_positions:
                 test_positions.append((x, y, z))
-        
+
         for i, (test_x, test_y, test_z) in enumerate(test_positions):
             if self.is_position_free(test_x, test_y, test_z, box_width, box_height, box_depth, min_gap):
                 return (test_x, test_y, test_z)
-        
+
         logging.warning("No space in primary placement zone, searching in extended area")
         extended_positions = []
-        
+
         for level in range(max_stack_levels):
             level_z = ground_level + level * (150 + min_gap)
-            
+
             for radius in range(grid_step, 1500, grid_step):
                 for angle_deg in range(0, 360, 30):
                     angle = math.radians(angle_deg)
                     test_x = start_x + radius * math.cos(angle)
                     test_y = start_y + radius * math.sin(angle)
-                    
+
                     if test_y > truck_front_y:
                         extended_positions.append((test_x, test_y, level_z))
-        
+
         for test_x, test_y, test_z in extended_positions[:50]:
             if self.is_position_free(test_x, test_y, test_z, box_width, box_height, box_depth, min_gap):
                 return (test_x, test_y, test_z)
-        
+
         fallback_x = placement_zone_x_right + 200 + box_width
         fallback_y = placement_zone_y_start + 200
         fallback_z = ground_level
@@ -545,39 +611,39 @@ class TruckLoadingApp(ShowBase):
 
     def is_position_free(self, test_x, test_y, test_z, box_width, box_height, box_depth, min_gap):
         """Проверяет, свободна ли позиция для размещения коробки с учетом минимального зазора"""
-        
+
         new_min_x = test_x - box_width / 2
         new_max_x = test_x + box_width / 2
         new_min_y = test_y - box_depth / 2
         new_max_y = test_y + box_depth / 2
         new_min_z = test_z
         new_max_z = test_z + box_height
-        
+
         for existing_box in self.scene_boxes:
             if existing_box.isEmpty():
                 continue
-                
+
             existing_pos = existing_box.getPos()
             existing_data = existing_box.getPythonTag('box_data')
             if not existing_data:
                 continue
-            
+
             existing_width = existing_data.get('width', 100)
-            existing_height = existing_data.get('height', 100)  
+            existing_height = existing_data.get('height', 100)
             existing_depth = existing_data.get('depth', 100)
-            
+
             exist_min_x = existing_pos.x - existing_width / 2
             exist_max_x = existing_pos.x + existing_width / 2
             exist_min_y = existing_pos.y - existing_depth / 2
             exist_max_y = existing_pos.y + existing_depth / 2
             exist_min_z = existing_pos.z - existing_height / 2
             exist_max_z = existing_pos.z + existing_height / 2
-            
+
             if (new_max_x + min_gap > exist_min_x and new_min_x - min_gap < exist_max_x and
-                new_max_y + min_gap > exist_min_y and new_min_y - min_gap < exist_max_y and
-                new_max_z + min_gap > exist_min_z and new_min_z - min_gap < exist_max_z):
+                    new_max_y + min_gap > exist_min_y and new_min_y - min_gap < exist_max_y and
+                    new_max_z + min_gap > exist_min_z and new_min_z - min_gap < exist_max_z):
                 return False
-        
+
         return True
 
     def create_box_geometry(self, vwriter, nwriter, width, height, depth):
@@ -611,44 +677,32 @@ class TruckLoadingApp(ShowBase):
             vwriter.addData3f(*vertex)
             nwriter.addData3f(*normal)
 
-
-
     def create_box_text_labels_static(self, box_node, box_data, width, height, depth):
         """Создание надписей на коробке на всех гранях с размерами"""
         from panda3d.core import TextNode
-        
+
         label = box_data['label']
         main_text_scale = width * 0.080
-        
-        # Загружаем жирный шрифт
-        font = None
-        try:
-            from utils.setting_deploy import get_resource_path
-            import os
-            font_path = get_resource_path('assets/fonts/NotoSans-Bold.ttf')
-            if os.path.exists(font_path):
-                font_path_unix = font_path.replace('\\', '/').replace('E:/', '/e/')
-                font = self.loader.loadFont(font_path_unix)
-        except:
-            pass
-        
+
+        font = self._load_bold_font()
+
         # Основные надписи на всех 6 гранях
         faces = [
-            ("front", (0, -depth/2 - 2, 0), (0, 0, 0)),
-            ("back", (0, depth/2 + 2, 0), (180, 0, 0)),
-            ("left", (-width/2 - 2, 0, 0), (90, 0, 0)),
-            ("right", (width/2 + 2, 0, 0), (-90, 0, 0)),
-            ("top", (0, 0, height/2 + 2), (0, -90, 0)),
-            ("bottom", (0, 0, -height/2 - 2), (0, 90, 0))
+            ("front", (0, -depth / 2 - 2, 0), (0, 0, 0)),
+            ("back", (0, depth / 2 + 2, 0), (180, 0, 0)),
+            ("left", (-width / 2 - 2, 0, 0), (90, 0, 0)),
+            ("right", (width / 2 + 2, 0, 0), (-90, 0, 0)),
+            ("top", (0, 0, height / 2 + 2), (0, -90, 0)),
+            ("bottom", (0, 0, -height / 2 - 2), (0, 90, 0))
         ]
-        
+
         for face_name, pos, rotation in faces:
             face_text_node = TextNode(f'main_text_{face_name}')
             face_text_node.setText(label)
             face_text_node.setAlign(TextNode.ACenter)
             if font:
                 face_text_node.setFont(font)
-            
+
             face_text_np = box_node.attachNewNode(face_text_node)
             face_text_np.setScale(main_text_scale)
             face_text_np.setPos(*pos)
@@ -656,23 +710,23 @@ class TruckLoadingApp(ShowBase):
             face_text_np.setColor(0, 0, 0, 1)
             face_text_np.setLightOff(1)
             face_text_np.setDepthOffset(5)
-        
+
         # Размеры на соответствующих гранях
         dimension_text_scale = main_text_scale * 0.7
-        
+
         # Ширина на левой и правой гранях
         width_positions = [
-            ("left_width", (-width/2 - 5, 0, -height/3), (90, 0, 0)),
-            ("right_width", (width/2 + 5, 0, -height/3), (-90, 0, 0))
+            ("left_width", (-width / 2 - 5, 0, -height / 3), (90, 0, 0)),
+            ("right_width", (width / 2 + 5, 0, -height / 3), (-90, 0, 0))
         ]
-        
+
         for dim_name, pos, rotation in width_positions:
             width_text_node = TextNode(dim_name)
             width_text_node.setText(f"W:{int(width)}")
             width_text_node.setAlign(TextNode.ACenter)
             if font:
                 width_text_node.setFont(font)
-            
+
             width_text_np = box_node.attachNewNode(width_text_node)
             width_text_np.setScale(dimension_text_scale)
             width_text_np.setPos(*pos)
@@ -680,20 +734,20 @@ class TruckLoadingApp(ShowBase):
             width_text_np.setColor(0, 0, 0, 1)
             width_text_np.setLightOff(1)
             width_text_np.setDepthOffset(5)
-        
+
         # Высота на передней и задней гранях
         height_positions = [
-            ("front_height", (-width/3, -depth/2 - 5, 0), (0, 0, 0)),
-            ("back_height", (-width/3, depth/2 + 5, 0), (180, 0, 0))
+            ("front_height", (-width / 3, -depth / 2 - 5, 0), (0, 0, 0)),
+            ("back_height", (-width / 3, depth / 2 + 5, 0), (180, 0, 0))
         ]
-        
+
         for dim_name, pos, rotation in height_positions:
             height_text_node = TextNode(dim_name)
             height_text_node.setText(f"H:{int(height)}")
             height_text_node.setAlign(TextNode.ACenter)
             if font:
                 height_text_node.setFont(font)
-            
+
             height_text_np = box_node.attachNewNode(height_text_node)
             height_text_np.setScale(dimension_text_scale)
             height_text_np.setPos(*pos)
@@ -701,20 +755,20 @@ class TruckLoadingApp(ShowBase):
             height_text_np.setColor(0, 0, 0, 1)
             height_text_np.setLightOff(1)
             height_text_np.setDepthOffset(5)
-        
+
         # Глубина на передней и задней гранях
         depth_positions = [
-            ("front_depth", (width/3, -depth/2 - 5, 0), (0, 0, 0)),
-            ("back_depth", (width/3, depth/2 + 5, 0), (180, 0, 0))
+            ("front_depth", (width / 3, -depth / 2 - 5, 0), (0, 0, 0)),
+            ("back_depth", (width / 3, depth / 2 + 5, 0), (180, 0, 0))
         ]
-        
+
         for dim_name, pos, rotation in depth_positions:
             depth_text_node = TextNode(dim_name)
             depth_text_node.setText(f"D:{int(depth)}")
             depth_text_node.setAlign(TextNode.ACenter)
             if font:
                 depth_text_node.setFont(font)
-            
+
             depth_text_np = box_node.attachNewNode(depth_text_node)
             depth_text_np.setScale(dimension_text_scale)
             depth_text_np.setPos(*pos)
@@ -758,7 +812,7 @@ class TruckLoadingApp(ShowBase):
         for wheel_file, lorry_file in model_formats:
             wheel_full_path = get_resource_path(f"assets/models/{wheel_file}")
             lorry_full_path = get_resource_path(f"assets/models/{lorry_file}")
-            
+
             if os.path.exists(wheel_full_path) and os.path.exists(lorry_full_path):
                 wheel_path = wheel_file  # Используем относительный путь для Panda3D
                 lorry_path = lorry_file  # Используем относительный путь для Panda3D
@@ -914,6 +968,11 @@ class TruckLoadingApp(ShowBase):
         if hasattr(self, 'box_lorry_move'):
             self.box_lorry_move.setPos(lorry_position + truck_long / 2, WHEEL_CABIN_HEIGHT, 0)
 
+        self.safe_execute(
+            lambda: self.panda_widget.update_company_logo() if hasattr(self, 'panda_widget') and self.panda_widget else None,
+            fallback=lambda: None
+        )
+
         # Preserve tent open/close state across size changes
         if hasattr(self.scene, 'tent_closed'):
             self.scene.set_tent_closed(self.scene.tent_closed)
@@ -948,10 +1007,10 @@ class TruckLoadingApp(ShowBase):
         self.accept("mouse3-up", self.arc.on_right_up)
         self.accept("wheel_up", self.on_wheel_in)
         self.accept("wheel_down", self.on_wheel_out)
-        
+
         self.accept("shift", self.shift_down)
         self.accept("shift-up", self.shift_up)
-        
+
         self.accept("r", self.on_r_key)
         self.accept("к", self.on_r_key)
         self.accept("backspace", self.on_backspace_key_direct)
@@ -970,7 +1029,7 @@ class TruckLoadingApp(ShowBase):
         self.accept("в", lambda: self.on_rotate_key(90, 0))
         self.accept("space", lambda: logging.info("[KeyPress] Space key pressed"))
         self.accept("escape", lambda: logging.info("[KeyPress] Escape key pressed"))
-        
+
         self.hovered_box = None
         self.deleted_boxes = []
         logging.info("[Controls] Adding mouse_hover_task to taskMgr")
@@ -994,16 +1053,19 @@ class TruckLoadingApp(ShowBase):
 
     def shift_up(self):
         self.is_shift_down = False
-    
+
+    @safe_method(
+        component="TruckLoadingApp",
+        category=ErrorCategory.UI,
+        severity=ErrorSeverity.LOW,
+        suppress_errors=True
+    )
     def on_wheel_in(self):
         if getattr(self, 'drag_active', False):
-            try:
-                step = 100.0
-                cam_forward = self.camera.getQuat(self.render).getForward()
-                self._drag_plane_point = self._drag_plane_point + cam_forward * (-step)
-                logging.info(f"[Drag] Wheel in: plane_point={self._drag_plane_point}")
-            except Exception:
-                pass
+            step = 100.0
+            cam_forward = self.camera.getQuat(self.render).getForward()
+            self._drag_plane_point = self._drag_plane_point + cam_forward * (-step)
+            logging.info(f"[Drag] Wheel in: plane_point={self._drag_plane_point}")
             return
         self.arc.on_wheel_in()
 
@@ -1060,7 +1122,8 @@ class TruckLoadingApp(ShowBase):
         if pick_point is None:
             pick_point = self._drag_plane_point
         self._drag_offset = self._drag_plane_point - pick_point
-        logging.info(f"[Drag] Start target={target.getName()} plane_point={self._drag_plane_point} normal={self._drag_plane_normal} offset={self._drag_offset}")
+        logging.info(
+            f"[Drag] Start target={target.getName()} plane_point={self._drag_plane_point} normal={self._drag_plane_normal} offset={self._drag_offset}")
         self.taskMgr.add(self._drag_task, "box_drag_task")
 
     def on_right_up(self):
@@ -1083,10 +1146,10 @@ class TruckLoadingApp(ShowBase):
             if hit is not None:
                 new_pos = hit + self._drag_offset
                 self._drag_target.setPos(self.render, new_pos)
-                try:
-                    self.update_side_loads()
-                except Exception:
-                    pass
+                self.safe_execute(
+                    self.update_side_loads,
+                    fallback=lambda: None
+                )
             self._drag_last_mouse = Point2(mx, my)
             return task.cont
         except Exception as e:
@@ -1152,8 +1215,8 @@ class TruckLoadingApp(ShowBase):
                 o_min_z = op.z - oh / 2.0
                 o_max_z = op.z + oh / 2.0
                 if (new_max_x > o_min_x and new_min_x < o_max_x and
-                    new_max_y > o_min_y and new_min_y < o_max_y and
-                    new_max_z > o_min_z and new_min_z < o_max_z):
+                        new_max_y > o_min_y and new_min_y < o_max_y and
+                        new_max_z > o_min_z and new_min_z < o_max_z):
                     return False
             if hasattr(self, 'truck_width') and hasattr(self, 'truck_depth') and hasattr(self, 'truck_height'):
                 t_half_w = self.truck_width / 2.0
@@ -1183,14 +1246,14 @@ class TruckLoadingApp(ShowBase):
                     # Меняем местами ширину и глубину
                     old_width = box_data.get('width', 100)
                     old_depth = box_data.get('depth', 100)
-                    
+
                     box_data['width'] = old_depth
                     box_data['depth'] = old_width
                     box_data['is_rotated'] = not box_data.get('is_rotated', False)
-                    
+
                     old_pos = self.selected_box.getPos()
                     self.selected_box.removeNode()
-                    
+
                     new_box = self.create_3d_box_from_data(box_data, (old_pos.x, old_pos.y, old_pos.z))
                     self.selected_box = new_box
             except Exception as e:
@@ -1219,36 +1282,36 @@ class TruckLoadingApp(ShowBase):
         if snapped == -180.0:
             return 180.0
         return snapped
-    
+
     def delete_selected_box(self):
         """Удалить выбранную коробку"""
         if self.selected_box:
             try:
                 if hasattr(self, 'scene_boxes') and self.selected_box in self.scene_boxes:
                     self.scene_boxes.remove(self.selected_box)
-                
+
                 self.selected_box.removeNode()
                 self.selected_box = None
             except Exception as e:
                 logging.error(f"Error deleting box: {e}")
-    
+
     def set_selected_box(self, box_node):
         """Установить выбранную коробку"""
         self.selected_box = box_node
-    
+
     def on_mouse_left_click(self):
         """Обработка клика левой кнопкой мыши для выделения коробок"""
         # Получаем позицию мыши
         if self.mouseWatcherNode.hasMouse():
             mouse_x = self.mouseWatcherNode.getMouseX()
             mouse_y = self.mouseWatcherNode.getMouseY()
-            
+
             # Создаем луч от камеры через позицию мыши
             from panda3d.core import CollisionTraverser, CollisionNode, CollisionRay, CollisionHandlerQueue
-            
+
             picker = CollisionTraverser()
             pq = CollisionHandlerQueue()
-            
+
             pickerNode = CollisionNode('mouseRay')
             pickerNP = self.camera.attachNewNode(pickerNode)
             pickerNode.setFromCollideMask(1)
@@ -1256,29 +1319,29 @@ class TruckLoadingApp(ShowBase):
             pickerRay = CollisionRay()
             pickerNode.addSolid(pickerRay)
             picker.addCollider(pickerNP, pq)
-            
+
             # Направляем луч от камеры через мышь
             pickerRay.setFromLens(self.camNode, mouse_x, mouse_y)
-            
+
             # Ищем пересечения с коробками
             picker.traverse(self.render)
-            
+
             if pq.getNumEntries() > 0:
                 # Сортируем по расстоянию
                 pq.sortEntries()
                 entry = pq.getEntry(0)
                 picked_obj = entry.getIntoNodePath()
-                
+
                 # Ищем коробку среди родителей
                 while picked_obj:
                     if picked_obj.getName().startswith('randomBox'):
                         self.set_selected_box(picked_obj)
                         return
                     picked_obj = picked_obj.getParent()
-            
+
             # Если ничего не выбрали, убираем выделение
             self.set_selected_box(None)
-        
+
         # Также вызываем оригинальный обработчик камеры
         self.arc.on_left_down()
 
@@ -1338,33 +1401,33 @@ class TruckLoadingApp(ShowBase):
             'depth': self.truck_depth
         }
         self.trucks.append(first_truck)
-        
+
     def mouse_hover_task(self, task):
         try:
             if not hasattr(self, 'last_mouse_check_time'):
                 self.last_mouse_check_time = 0
-            
+
             current_time = task.time
             if current_time - self.last_mouse_check_time < 0.1:
                 return task.cont
-            
+
             self.last_mouse_check_time = current_time
-            
+
             if not self.mouseWatcherNode.hasMouse():
                 if self.hovered_box:
                     logging.debug("[MouseHover] Mouse not available, hiding box info")
                     self.hovered_box = None
                     self.hide_box_info()
                 return task.cont
-                
+
             mouse_x = self.mouseWatcherNode.getMouseX()
             mouse_y = self.mouseWatcherNode.getMouseY()
-            
+
             from panda3d.core import CollisionTraverser, CollisionNode, CollisionRay, CollisionHandlerQueue
-            
+
             picker = CollisionTraverser()
             pq = CollisionHandlerQueue()
-            
+
             pickerNode = CollisionNode('mouseHoverRay')
             pickerNP = self.camera.attachNewNode(pickerNode)
             pickerNode.setFromCollideMask(1)
@@ -1372,35 +1435,37 @@ class TruckLoadingApp(ShowBase):
             pickerRay = CollisionRay()
             pickerNode.addSolid(pickerRay)
             picker.addCollider(pickerNP, pq)
-            
+
             pickerRay.setFromLens(self.camNode, mouse_x, mouse_y)
             picker.traverse(self.render)
-            
+
             new_hovered_box = None
-            
+
             if pq.getNumEntries() > 0:
                 if not hasattr(self, 'collision_debug_logged'):
-                    logging.info(f"[MouseHover] First collision detection: Found {pq.getNumEntries()} collision entries")
+                    logging.info(
+                        f"[MouseHover] First collision detection: Found {pq.getNumEntries()} collision entries")
                     self.collision_debug_logged = True
-                
+
                 pq.sortEntries()
-                
+
                 for i in range(pq.getNumEntries()):
                     entry = pq.getEntry(i)
                     picked_obj = entry.getIntoNodePath()
-                    
+
                     current_obj = picked_obj
                     while current_obj:
                         if current_obj.getName().startswith('randomBox'):
                             new_hovered_box = current_obj
                             break
                         current_obj = current_obj.getParent()
-                    
+
                     if new_hovered_box:
                         break
-            
+
             if new_hovered_box != self.hovered_box:
-                logging.info(f"[MouseHover] Hover changed from {self.hovered_box.getName() if self.hovered_box else 'None'} to {new_hovered_box.getName() if new_hovered_box else 'None'}")
+                logging.info(
+                    f"[MouseHover] Hover changed from {self.hovered_box.getName() if self.hovered_box else 'None'} to {new_hovered_box.getName() if new_hovered_box else 'None'}")
                 self.hovered_box = new_hovered_box
                 if self.hovered_box:
                     box_data = self.hovered_box.getPythonTag('box_data')
@@ -1412,14 +1477,14 @@ class TruckLoadingApp(ShowBase):
                 else:
                     logging.debug("[MouseHover] Hiding box info")
                     self.hide_box_info()
-            
+
             pickerNP.removeNode()
             return task.cont
-            
+
         except Exception as e:
             logging.error(f"[MouseHover] Error in mouse_hover_task: {e}")
             return task.cont
-    
+
     def show_box_info(self, box_data):
         logging.debug(f"[ShowBoxInfo] Attempting to show info for box: {box_data.get('label', 'Unknown')}")
         if hasattr(self, 'panda_widget') and self.panda_widget:
@@ -1427,7 +1492,7 @@ class TruckLoadingApp(ShowBase):
             self.panda_widget.show_box_info(box_data)
         else:
             logging.warning(f"[ShowBoxInfo] panda_widget not found or not set")
-    
+
     def hide_box_info(self):
         logging.debug(f"[HideBoxInfo] Attempting to hide box info")
         if hasattr(self, 'panda_widget') and self.panda_widget:
@@ -1435,19 +1500,19 @@ class TruckLoadingApp(ShowBase):
             self.panda_widget.box_info_widget.hide()
         else:
             logging.warning(f"[HideBoxInfo] panda_widget not found or not set")
-    
+
     def on_r_key(self):
         logging.info(f"[KeyPress] R/Q key pressed")
         self.rotate_selected_box()
-    
+
     def on_hide_box_key_direct(self):
         logging.info(f"[KeyPress] H/Р key pressed directly")
         self.on_hide_box_key()
-    
+
     def on_backspace_key_direct(self):
         logging.info(f"[KeyPress] Backspace key pressed directly")
         self.on_backspace_key()
-    
+
     def on_backspace_key(self):
         target = self.hovered_box or self.selected_box
         logging.info(f"[Backspace] Key pressed - target: {target.getName() if target else 'None'}")
@@ -1462,25 +1527,25 @@ class TruckLoadingApp(ShowBase):
                         'node': target
                     })
                     logging.info(f"[Backspace] Added box {box_data.get('label', 'Unknown')} to deleted list")
-                
+
                 if hasattr(self, 'scene_boxes') and target in self.scene_boxes:
                     self.scene_boxes.remove(target)
                     logging.debug(f"[Backspace] Removed box from scene_boxes list")
-                
+
                 self.hide_box_info()
                 target.removeNode()
                 if target is self.hovered_box:
                     self.hovered_box = None
                 if target is self.selected_box:
                     self.selected_box = None
-                
+
                 logging.info(f"[Backspace] Box {box_name} completely removed from scene and moved to deleted list")
-                
+
             except Exception as e:
                 logging.error(f"[Backspace] Error removing box: {e}")
         else:
             logging.debug(f"[Backspace] No box to delete")
-    
+
     def on_hide_box_key(self):
         target = self.hovered_box or self.selected_box
         logging.info(f"[HideBox] H/Р key pressed - target: {target.getName() if target else 'None'}")
@@ -1492,18 +1557,18 @@ class TruckLoadingApp(ShowBase):
                     if hasattr(self, 'scene_boxes') and target in self.scene_boxes:
                         self.scene_boxes.remove(target)
                         logging.debug(f"[HideBox] Removed box from scene_boxes list")
-                    
+
                     self.hide_box_info()
                     target.removeNode()
                     if target is self.hovered_box:
                         self.hovered_box = None
                     if target is self.selected_box:
                         self.selected_box = None
-                    
+
                     self.return_box_to_list(box_data)
-                    
+
                     logging.info(f"[HideBox] Box {box_name} hidden and returned to BoxListWidget")
-                
+
             except Exception as e:
                 logging.error(f"[HideBox] Error hiding box: {e}")
         else:
@@ -1525,7 +1590,7 @@ class TruckLoadingApp(ShowBase):
             logging.info(f"[HideSelected] Box {node_name} returned to list")
         except Exception as e:
             logging.error(f"[HideSelected] Error: {e}")
-    
+
     def return_box_to_list(self, box_data):
         logging.info(f"[ReturnBox] Returning box {box_data.get('label', 'Unknown')} to BoxListWidget")
         try:
@@ -1533,16 +1598,16 @@ class TruckLoadingApp(ShowBase):
                 parent_window = self.panda_widget.parent()
                 while parent_window and not hasattr(parent_window, 'sidebar'):
                     parent_window = parent_window.parent()
-                
+
                 if parent_window and hasattr(parent_window, 'sidebar'):
                     logging.debug(f"[ReturnBox] Found sidebar, getting box_manager")
                     box_manager = parent_window.sidebar.get_box_manager()
-                    
+
                     if box_manager:
                         from core.box.box import Box
                         new_box = Box(
                             width=box_data.get('width', 100),
-                            height=box_data.get('height', 100), 
+                            height=box_data.get('height', 100),
                             depth=box_data.get('depth', 100),
                             label=box_data.get('label', 'Unknown'),
                             weight=box_data.get('weight', 1.0),
@@ -1550,27 +1615,28 @@ class TruckLoadingApp(ShowBase):
                             additional_info=box_data.get('additional_info', ''),
                             cargo_markings=box_data.get('cargo_markings', [])
                         )
-                        
+
                         box_manager.add_box(new_box)
-                        logging.info(f"[ReturnBox] Successfully added box {box_data.get('label', 'Unknown')} to BoxManager")
+                        logging.info(
+                            f"[ReturnBox] Successfully added box {box_data.get('label', 'Unknown')} to BoxManager")
                     else:
                         logging.error(f"[ReturnBox] get_box_manager() returned None")
                 else:
                     logging.error(f"[ReturnBox] Could not find sidebar")
             else:
                 logging.error(f"[ReturnBox] panda_widget not found")
-                
+
         except Exception as e:
             logging.error(f"[ReturnBox] Error returning box to list: {e}")
             import traceback
             logging.error(f"[ReturnBox] Traceback: {traceback.format_exc()}")
-    
+
     def set_panda_widget(self, widget):
         self.panda_widget = widget
-        try:
-            self.update_side_loads()
-        except Exception:
-            pass
+        self.safe_execute(
+            self.update_side_loads,
+            fallback=lambda: None
+        )
 
     def update_side_loads(self):
         try:
@@ -1608,3 +1674,114 @@ class TruckLoadingApp(ShowBase):
                         lcw.calculator.update_setting('Mg4', total_weights[3])
         except Exception as e:
             logging.error(f"[Loads] update_side_loads error: {e}")
+
+    def load_company_logo(self):
+        try:
+            logger.info("Loading company logo...")
+            settings_manager = SettingsManager()
+            customization_settings = settings_manager.get_section('customization')
+
+            logger.info(f"Customization settings: {customization_settings}")
+
+            logo_path = customization_settings.get('logo_path', '')
+            if not logo_path:
+                logger.info("No company logo path configured")
+                return
+
+            if not os.path.exists(logo_path):
+                logger.warning(f"Company logo file not found: {logo_path}")
+                return
+
+            logo_size = customization_settings.get('logo_size', 100)
+            logo_rotation = customization_settings.get('logo_rotation', 0)
+
+            logger.info(f"Applying logo: path={logo_path}, size={logo_size}%, rotation={logo_rotation}°")
+
+            self.apply_logo_to_gui(logo_path, logo_size, logo_rotation)
+            logger.info(f"Company logo applied from: {logo_path}")
+
+        except Exception as e:
+            logger.error(f"Error loading company logo: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+
+    def apply_logo_to_gui(self, logo_path, size_percent, rotation):
+        try:
+            from panda3d.core import TransparencyAttrib, CardMaker
+
+            logger.info(f"Applying logo to GUI: {logo_path}")
+
+            if hasattr(self, 'company_logo_np') and self.company_logo_np:
+                self.company_logo_np.removeNode()
+                self.company_logo_np = None
+
+            if not logo_path or not os.path.exists(logo_path):
+                logger.warning(f"Logo file not found: {logo_path}")
+                return
+
+            if logo_path.lower().endswith('.svg'):
+                logo_texture = self.convert_svg_to_texture(logo_path, 512, 512)
+            else:
+                logo_texture = self._load_texture_file(logo_path)
+
+            if not logo_texture:
+                logger.warning(f"Failed to load logo texture from: {logo_path}")
+                return
+
+            self._apply_texture_filters(logo_texture)
+
+            win_w = max(1, int(self.win.getXSize()))
+            win_h = max(1, int(self.win.getYSize()))
+
+            tex_w = max(1, logo_texture.getXSize())
+            tex_h = max(1, logo_texture.getYSize())
+            aspect = tex_w / float(tex_h)
+
+            base_px = int(min(win_w, win_h) * 0.2)
+            scale_factor = max(0.05, float(size_percent) / 100.0)
+            target_h = max(32, int(base_px * scale_factor))
+            target_w = max(32, int(target_h * aspect))
+
+            cm = CardMaker('company_logo_card')
+            cm.setFrame(-target_w / 2.0, target_w / 2.0, -target_h / 2.0, target_h / 2.0)
+            node = cm.generate()
+            np = self.pixel2d.attachNewNode(node)
+            np.setTexture(logo_texture)
+            np.setTransparency(TransparencyAttrib.MAlpha)
+            np.setBin('gui-popup', 0)
+            np.setR(float(rotation or 0))
+
+            self.company_logo_np = np
+            self.company_logo_size = (target_w, target_h)
+            self._reposition_company_logo()
+            logger.info(f"Logo successfully applied to GUI with size {size_percent}% and rotation {rotation}°")
+        except Exception as e:
+            logger.error(f"Error applying logo to GUI: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+
+    def _reposition_company_logo(self):
+        try:
+            if not hasattr(self, 'company_logo_np') or not self.company_logo_np:
+                return
+            win_w = max(1, int(self.win.getXSize()))
+            win_h = max(1, int(self.win.getYSize()))
+            w, h = getattr(self, 'company_logo_size', (128, 128))
+            margin = 10
+            pos_x = win_w - w / 2.0 - margin
+            pos_z = h / 2.0 + margin
+            self.company_logo_np.setPos(pos_x, 0, pos_z)
+        except Exception:
+            pass
+
+    def update_company_logo(self):
+        self.load_company_logo()
+
+    def remove_company_logo(self):
+        try:
+            if hasattr(self, 'company_logo_np') and self.company_logo_np:
+                self.company_logo_np.removeNode()
+                self.company_logo_np = None
+                logger.info("Company logo removed from GUI")
+        except Exception as e:
+            logger.error(f"Error removing company logo: {e}")

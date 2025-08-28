@@ -3,9 +3,12 @@ import logging
 from GUI.left_sidebar.left_sidebar import LeftSidebar
 from GUI.panda_widget import PandaWidget
 from GUI.settings_window.settings_window import SettingsWindow
+from GUI.error_dialog import ErrorReportDialog
 from core.hotkeys import HotkeyController
 from utils.setting_deploy import get_resource_path
 from core.i18n import tr, translation_manager, TranslatableMixin
+from core.error_management import ErrorReportingMixin, handle_exceptions, safe_method
+from core.exceptions import ErrorCategory, ErrorSeverity
 from PyQt5 import QtWidgets, QtCore, QtGui
 
 import sys
@@ -19,13 +22,19 @@ logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %
 logger = logging.getLogger(__name__)
 
 
-class MainWindow(QtWidgets.QMainWindow, TranslatableMixin):
+class MainWindow(QtWidgets.QMainWindow, TranslatableMixin, ErrorReportingMixin):
+    @handle_exceptions(
+        category=ErrorCategory.UI,
+        severity=ErrorSeverity.CRITICAL,
+        user_message="Failed to initialize the main window"
+    )
     def __init__(self):
         super().__init__()
         self.setMinimumSize(1000, 700)
         self.setWindowIcon(QtGui.QIcon(get_resource_path("assets/icon/logo.png")))
+        
+        self.log_info("Main window initializing")
 
-        # Устанавливаем размер окна на весь доступный экран
         screen = QtWidgets.QApplication.primaryScreen()
         if screen:
             screen_geometry = screen.availableGeometry()
@@ -44,7 +53,6 @@ class MainWindow(QtWidgets.QMainWindow, TranslatableMixin):
         self.sidebar.toggled.connect(self._on_sidebar_toggled)
 
         self.hotkeys = HotkeyController(self)
-        # Подключаем сигналы горячих клавиш к функциям
         self.hotkeys.rotate_box.connect(self.on_rotate_box)
         self.hotkeys.delete_box.connect(self.on_delete_box)
         self.hotkeys.hide_box.connect(self.on_hide_box)
@@ -122,31 +130,53 @@ class MainWindow(QtWidgets.QMainWindow, TranslatableMixin):
         else:
             logging.debug("Sidebar collapsed")
 
+    @safe_method(
+        component="MainWindow",
+        category=ErrorCategory.GRAPHICS,
+        severity=ErrorSeverity.MEDIUM,
+        suppress_errors=True
+    )
     def _on_viewer_ready(self):
-        """Обработчик готовности 3D-движка"""
         logging.info("[Qt] Panda3D ready")
-        # Применяем текущее состояние расчета нагрузок на оверлей сразу после готовности движка
         try:
-            if hasattr(self, 'sidebar') and hasattr(self.sidebar, 'load_calculation'):
-                lcw = self.sidebar.load_calculation
-                if lcw:
-                    lcw.update_trailer_length_from_truck()
-                    lcw.update_display()
+            # Ensure logo overlay updates once 3D is ready
+            if hasattr(self, 'viewer') and self.viewer:
+                self.viewer.update_company_logo()
         except Exception:
-            logging.exception("Failed to apply initial load calculation overlay")
+            pass
+        if hasattr(self, 'sidebar') and hasattr(self.sidebar, 'load_calculation'):
+            lcw = self.sidebar.load_calculation
+            if lcw:
+                lcw.update_trailer_length_from_truck()
+                lcw.update_display()
 
+    @safe_method(
+        component="MainWindow",
+        category=ErrorCategory.GRAPHICS,
+        severity=ErrorSeverity.LOW,
+        suppress_errors=True
+    )
     def on_rotate_box(self):
-        """Поворот выбранной коробки через горячую клавишу"""
         if hasattr(self.viewer, 'app3d') and self.viewer.app3d:
             self.viewer.app3d.rotate_selected_box()
 
+    @safe_method(
+        component="MainWindow",
+        category=ErrorCategory.GRAPHICS,
+        severity=ErrorSeverity.LOW,
+        suppress_errors=True
+    )
     def on_delete_box(self):
-        """Удаление выбранной коробки через горячую клавишу"""
         if hasattr(self.viewer, 'app3d') and self.viewer.app3d:
             self.viewer.app3d.delete_selected_box()
 
+    @safe_method(
+        component="MainWindow",
+        category=ErrorCategory.GRAPHICS,
+        severity=ErrorSeverity.LOW,
+        suppress_errors=True
+    )
     def on_hide_box(self):
-        """Скрытие выбранной коробки через горячую клавишу"""
         if hasattr(self.viewer, 'app3d') and self.viewer.app3d:
             self.viewer.app3d.hide_selected_box()
 
@@ -159,6 +189,9 @@ class MainWindow(QtWidgets.QMainWindow, TranslatableMixin):
         self.action_open = self.file_menu.addAction('', self.open_file, 'Ctrl+O')
         self.action_save = self.file_menu.addAction('', self.save_file, 'Ctrl+S')
         self.action_save_as = self.file_menu.addAction('', self.save_file_as, 'Ctrl+Shift+S')
+        self.file_menu.addSeparator()
+        self.action_error_report = self.file_menu.addAction('', self.show_error_report)
+        self.action_error_report.setIcon(self.style().standardIcon(QtWidgets.QStyle.SP_MessageBoxWarning))
         self.file_menu.addSeparator()
         self.action_exit = self.file_menu.addAction('', self.close, 'Ctrl+Q')
 
@@ -183,6 +216,11 @@ class MainWindow(QtWidgets.QMainWindow, TranslatableMixin):
     def new_file(self):
         print("Новый файл")
 
+    @safe_method(
+        component="MainWindow",
+        category=ErrorCategory.FILE_IO,
+        severity=ErrorSeverity.MEDIUM
+    )
     def open_file(self):
         file_path, _ = QtWidgets.QFileDialog.getOpenFileName(
             self, tr("Открыть файл"), "", tr("JSON файлы (*.json);;Все файлы (*.*)")
@@ -190,9 +228,19 @@ class MainWindow(QtWidgets.QMainWindow, TranslatableMixin):
         if file_path:
             print(f"Открыть файл: {file_path}")
 
+    @safe_method(
+        component="MainWindow",
+        category=ErrorCategory.FILE_IO,
+        severity=ErrorSeverity.MEDIUM
+    )
     def save_file(self):
         print("Сохранить файл")
 
+    @safe_method(
+        component="MainWindow",
+        category=ErrorCategory.FILE_IO,
+        severity=ErrorSeverity.MEDIUM
+    )
     def save_file_as(self):
         file_path, _ = QtWidgets.QFileDialog.getSaveFileName(
             self, tr("Сохранить как"), "", tr("JSON файлы (*.json);;Все файлы (*.*)")
@@ -200,12 +248,22 @@ class MainWindow(QtWidgets.QMainWindow, TranslatableMixin):
         if file_path:
             print(f"Сохранить как: {file_path}")
 
+    @safe_method(
+        component="MainWindow",
+        category=ErrorCategory.UI,
+        severity=ErrorSeverity.MEDIUM
+    )
     def open_settings(self):
-        """Открытие окна настроек"""
         if hasattr(self.viewer, 'app3d') and self.viewer.app3d:
             graphics_manager = getattr(self.viewer.app3d, 'graphics_manager', None)
             settings_window = SettingsWindow(self.viewer.app3d.arc, graphics_manager, self.units_manager, self)
+            settings_window.set_truck_app(self.viewer.app3d)
             settings_window.exec_()
+
+    def show_error_report(self):
+        self.log_info("Opening error report dialog")
+        error_dialog = ErrorReportDialog(self)
+        error_dialog.exec_()
 
     def show_help(self):
         """Показать справку"""
@@ -321,8 +379,13 @@ class MainWindow(QtWidgets.QMainWindow, TranslatableMixin):
         msg.setIcon(QtWidgets.QMessageBox.Information)
         msg.exec_()
 
+    @safe_method(
+        component="MainWindow",
+        category=ErrorCategory.GRAPHICS,
+        severity=ErrorSeverity.LOW,
+        suppress_errors=True
+    )
     def _view_top(self):
-        """Вид сверху"""
         if hasattr(self.viewer, 'app3d') and self.viewer.app3d:
             cam = self.viewer.app3d.arc
             cam.target.set(0, 0, 0)
@@ -331,8 +394,13 @@ class MainWindow(QtWidgets.QMainWindow, TranslatableMixin):
             cam.beta = 3.14159265 / 2
             cam.update()
 
+    @safe_method(
+        component="MainWindow",
+        category=ErrorCategory.GRAPHICS,
+        severity=ErrorSeverity.LOW,
+        suppress_errors=True
+    )
     def _view_left(self):
-        """Вид слева"""
         if hasattr(self.viewer, 'app3d') and self.viewer.app3d:
             cam = self.viewer.app3d.arc
             cam.target.set(0, 0, 0)
@@ -341,8 +409,13 @@ class MainWindow(QtWidgets.QMainWindow, TranslatableMixin):
             cam.beta = 3.14159265
             cam.update()
 
+    @safe_method(
+        component="MainWindow",
+        category=ErrorCategory.GRAPHICS,
+        severity=ErrorSeverity.LOW,
+        suppress_errors=True
+    )
     def _view_right(self):
-        """Вид справа"""
         if hasattr(self.viewer, 'app3d') and self.viewer.app3d:
             cam = self.viewer.app3d.arc
             cam.target.set(0, 0, 0)
@@ -351,14 +424,19 @@ class MainWindow(QtWidgets.QMainWindow, TranslatableMixin):
             cam.beta = 0
             cam.update()
 
+    @safe_method(
+        component="MainWindow",
+        category=ErrorCategory.GRAPHICS,
+        severity=ErrorSeverity.LOW,
+        suppress_errors=True
+    )
     def _view_reset(self):
-        """Сброс вида"""
         if hasattr(self.viewer, 'app3d') and self.viewer.app3d:
             cam = self.viewer.app3d.arc
             cam.target.set(0, 0, 0)
             cam.radius = 3000
             cam.alpha = 3.14159265 / 2
-            cam.beta = 3.14159265 / 4  # Исправлено для соответствия начальному углу
+            cam.beta = 3.14159265 / 4
             cam.update()
 
     def _toggle_fullscreen(self):
@@ -396,6 +474,7 @@ class MainWindow(QtWidgets.QMainWindow, TranslatableMixin):
         self.action_open.setText(f"📂 {tr('Открыть')}...")
         self.action_save.setText(f"💾 {tr('Сохранить')}")
         self.action_save_as.setText(f"💾 {tr('Сохранить как')}...")
+        self.action_error_report.setText(f"⚠️ {tr('Отчет об ошибках')}")
         self.action_exit.setText(f"❌ {tr('Выход')}")
         
         self.view_menu.setTitle(f"👁 {tr('Вид')}")

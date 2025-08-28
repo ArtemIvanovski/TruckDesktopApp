@@ -5,9 +5,12 @@ import sys
 
 from PyQt5 import QtWidgets, QtCore
 from GUI.box_info_widget import BoxInfoWidget
+from GUI.company_logo_widget import CompanyLogoWidget
 from core.i18n import tr, TranslatableMixin
 from GUI.truck_loading_app import TruckLoadingApp
 from core.trucks import TruckManager
+from core.error_management import ErrorReportingMixin, safe_method
+from core.exceptions import ErrorCategory, ErrorSeverity
 
 
 print(f"Current working directory: {os.getcwd()}")
@@ -261,7 +264,7 @@ class TruckInfoOverlay(QtWidgets.QWidget, TranslatableMixin):
             self._render()
 
 
-class PandaWidget(QtWidgets.QWidget):
+class PandaWidget(QtWidgets.QWidget, ErrorReportingMixin):
     ready = QtCore.pyqtSignal()
 
     def __init__(self, parent=None):
@@ -286,12 +289,14 @@ class PandaWidget(QtWidgets.QWidget):
         except Exception:
             pass
         self.box_info_widget = BoxInfoWidget(self.window(), shared_units)
+        self.company_logo_widget = CompanyLogoWidget(self.window())
         self.axle_overlay = AxleResultsOverlay(self.window(), shared_units)
         self.truck_info_overlay = TruckInfoOverlay(self.window(), shared_units)
         self.truck_manager = TruckManager()
         self.truck_manager.add_on_changed(self._render_truck_overlay)
         
         QtCore.QTimer.singleShot(100, self._init_panda)
+        QtCore.QTimer.singleShot(150, self.update_company_logo)
 
     def _init_panda(self):
         try:
@@ -345,13 +350,18 @@ class PandaWidget(QtWidgets.QWidget):
         except Exception as e:
             logging.error(f"[Qt] Failed to init Panda3D: {e}")
 
+    @safe_method(
+        component="PandaWidget",
+        category=ErrorCategory.USER_INPUT,
+        severity=ErrorSeverity.LOW,
+        suppress_errors=True
+    )
     def dragEnterEvent(self, event):
         if event.mimeData().hasText():
-            try:
-                json.loads(event.mimeData().text())
-                event.acceptProposedAction()
-            except:
-                event.ignore()
+            json.loads(event.mimeData().text())
+            event.acceptProposedAction()
+        else:
+            event.ignore()
 
     def dragMoveEvent(self, event):
         if event.mimeData().hasText():
@@ -431,6 +441,7 @@ class PandaWidget(QtWidgets.QWidget):
             self.app3d.resize_window(w, h)
         
         self.box_info_widget.position_at_corner(self)
+        self.company_logo_widget.position_bottom_right(self)
         self.axle_overlay.position_below_box_info(self)
         self.truck_info_overlay.position_below_axle_overlay(self, self.axle_overlay)
         super().resizeEvent(event)
@@ -439,6 +450,7 @@ class PandaWidget(QtWidgets.QWidget):
         logging.debug(f"[PandaWidget] show_box_info called for box: {box_data.get('label', 'Unknown')}")
         self.box_info_widget.show_box_info(box_data)
         self.box_info_widget.position_at_corner(self)
+        self.company_logo_widget.position_bottom_right(self)
         self.axle_overlay.position_below_box_info(self)
         self.truck_info_overlay.position_below_axle_overlay(self, self.axle_overlay)
 
@@ -469,3 +481,26 @@ class PandaWidget(QtWidgets.QWidget):
     def _render_truck_overlay(self):
         # Устаревший метод, оставлен для совместимости
         pass
+
+    def update_company_logo(self):
+        try:
+            from utils.settings_manager import SettingsManager
+            mgr = SettingsManager()
+            cfg = mgr.get_section('customization') or {}
+            path = cfg.get('logo_path', '')
+            size_percent = int(cfg.get('logo_size', 25) or 25)
+            rotation = int(cfg.get('logo_rotation', 0) or 0)
+            if path and os.path.exists(path):
+                self.company_logo_widget.apply(path, size_percent, rotation)
+                self.company_logo_widget.position_bottom_right(self)
+            else:
+                self.company_logo_widget.hide()
+        except Exception:
+            self.company_logo_widget.hide()
+
+    def set_company_logo(self, logo_path: str, size_percent: int, rotation: int):
+        self.company_logo_widget.apply(logo_path, size_percent, rotation)
+        self.company_logo_widget.position_bottom_right(self)
+
+    def remove_company_logo(self):
+        self.company_logo_widget.hide()

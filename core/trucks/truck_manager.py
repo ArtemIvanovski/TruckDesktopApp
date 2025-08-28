@@ -10,7 +10,19 @@ class TruckManager:
         self.app3d = None
         self._callbacks = []
         # In-memory only: always start with one default truck
-        self.trucks.append(TruckModel(1, 'Грузовик 1', 1650, 260, 245))
+        default_truck = TruckModel(1, 'Грузовик 1', 1650, 260, 245)
+        
+        # Initialize default truck with load calculation settings
+        default_load_settings = {
+            'Mt': 8.0, 'Nt_data': 2.5, 'Lt': 3.5, 'L_data': 0.4,
+            'Mp': 8.0, 'LC': 4.2, 'LB': 1.7, 'Ntp': 1.6,
+            'Mg1': 4.0, 'Mg2': 4.0, 'Mg3': 4.0, 'Mg4': 4.0,
+            'season_limit': False, 'show_on_main_screen': False,
+            'LA': 16.5  # Default truck length
+        }
+        default_truck.load_settings = default_load_settings.copy()
+        
+        self.trucks.append(default_truck)
 
     def set_app3d(self, app3d):
         self.app3d = app3d
@@ -55,6 +67,17 @@ class TruckManager:
     def add_truck(self) -> TruckModel:
         new_id = max([t.id for t in self.trucks] + [0]) + 1
         model = TruckModel(new_id, f'Грузовик {new_id}', 1650, 260, 245)
+        
+        # Initialize with default load calculation settings
+        default_load_settings = {
+            'Mt': 8.0, 'Nt_data': 2.5, 'Lt': 3.5, 'L_data': 0.4,
+            'Mp': 8.0, 'LC': 4.2, 'LB': 1.7, 'Ntp': 1.6,
+            'Mg1': 4.0, 'Mg2': 4.0, 'Mg3': 4.0, 'Mg4': 4.0,
+            'season_limit': False, 'show_on_main_screen': False,
+            'LA': 16.5  # Default truck length
+        }
+        model.load_settings = default_load_settings.copy()
+        
         self.trucks.append(model)
         self.current_index = len(self.trucks) - 1
         self._notify()

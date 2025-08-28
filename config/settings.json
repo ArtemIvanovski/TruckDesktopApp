@@ -7,21 +7,22 @@
     "weight_unit": "kg"
   },
   "load_calculation": {
-    "Mt": 9.0,
+    "Mt": 8.0,
     "Nt_data": 2.5,
     "Lt": 3.5,
     "L_data": 0.4,
-    "Mp": 9.0,
+    "Mp": 8.0,
     "LC": 4.2,
     "LB": 1.7,
     "Ntp": 1.6,
     "Mg1": 0.0,
     "Mg2": 0.0,
-    "Mg3": 0.01,
-    "Mg4": 0.0,
-    "season_limit": true,
-    "show_on_main_screen": true,
-    "overlay_position": "bottom"
+    "Mg3": 0.0,
+    "Mg4": 0.005,
+    "season_limit": false,
+    "show_on_main_screen": false,
+    "overlay_position": "bottom",
+    "LA": 16.5
   },
   "graphics": {
     "enable_specular": false,
@@ -101,5 +102,18 @@
       }
     ],
     "current_truck_index": 1
+  },
+  "customization": {
+    "logo_path": "company_logos\\fragile_tmp_logo_2.png",
+    "logo_pos_x": 0.0,
+    "logo_pos_y": 0.0,
+    "logo_pos_z": 0.0,
+    "logo_scale_x": 0.20000000000000015,
+    "logo_scale_y": 0.20000000000000015,
+    "logo_size": 45,
+    "logo_rotation": 0,
+    "logo_rotation_x": 90,
+    "logo_rotation_y": 90,
+    "logo_rotation_z": -90
   }
 }

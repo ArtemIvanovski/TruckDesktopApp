@@ -3,87 +3,147 @@ from PyQt5.QtCore import pyqtSignal
 
 from core.i18n import tr, TranslatableMixin
 from core.load_calculation.load_calculator import LoadCalculator
+from core.error_management import ErrorReportingMixin, safe_method
+from core.exceptions import ErrorCategory, ErrorSeverity
 
 
-class LoadCalculationWidget(QtWidgets.QWidget, TranslatableMixin):
+class LoadCalculationWidget(QtWidgets.QWidget, TranslatableMixin, ErrorReportingMixin):
     def __init__(self, units_manager, get_app3d, parent=None):
         super().__init__(parent)
         self.units_manager = units_manager
         self.get_app3d = get_app3d
         self.calculator = LoadCalculator()
+        self._truck_manager = None
         self.setup_ui()
         self.retranslate_ui()
         
         self.calculator.settings_changed.connect(self.update_display)
         
         self._attach_to_truck_manager()
+        if not self._truck_manager:
+            QtCore.QTimer.singleShot(500, self._attach_to_truck_manager)
         self.update_trailer_length_from_truck()
         self.update_display()
 
+    @safe_method(
+        component="LoadCalculationWidget",
+        category=ErrorCategory.CALCULATION,
+        severity=ErrorSeverity.LOW,
+        suppress_errors=True
+    )
     def update_trailer_length_from_truck(self):
-        try:
-            app = self.get_app3d()
-            if app and hasattr(app, 'truck_scene'):
-                length_cm = app.truck_scene.truck_width
-                self.calculator.set_trailer_length(length_cm)
-                if hasattr(self, 'trailer_length_label'):
-                    self.trailer_length_label.setText(f"{length_cm / 100.0:.1f} м")
-        except:
-            pass
+        app = self.get_app3d()
+        if app and hasattr(app, 'truck_scene'):
+            length_cm = app.truck_scene.truck_width
+            self.calculator.set_trailer_length(length_cm)
+            if hasattr(self, 'trailer_length_label'):
+                self.trailer_length_label.setText(f"{length_cm / 100.0:.1f} м")
 
+    @safe_method(
+        component="LoadCalculationWidget",
+        category=ErrorCategory.SYSTEM,
+        severity=ErrorSeverity.MEDIUM,
+        suppress_errors=True
+    )
     def _attach_to_truck_manager(self):
-        try:
-            app = self.get_app3d()
-            if not app or not hasattr(app, 'panda_widget') or not app.panda_widget:
-                return
-            self._truck_manager = app.panda_widget.get_truck_manager()
-            if self._truck_manager:
-                self._truck_manager.add_on_changed(self._on_truck_changed)
-                # Load per-truck settings
-                self._load_from_current_truck()
-        except Exception:
-            pass
-
-    def _on_truck_changed(self):
-        # Save old settings into previous truck and load new truck settings
-        try:
-            self._save_to_current_truck()
+        app = self.get_app3d()
+        if not app or not hasattr(app, 'panda_widget') or not app.panda_widget:
+            QtCore.QTimer.singleShot(500, self._attach_to_truck_manager)
+            return
+        mgr = app.panda_widget.get_truck_manager()
+        if not mgr:
+            QtCore.QTimer.singleShot(500, self._attach_to_truck_manager)
+            return
+        if self._truck_manager is not mgr:
+            self._truck_manager = mgr
+            self._truck_manager.add_on_changed(self._on_truck_changed)
             self._load_from_current_truck()
-            self.update_trailer_length_from_truck()
-            self.update_display()
-        except Exception:
-            pass
 
+    @safe_method(
+        component="LoadCalculationWidget",
+        category=ErrorCategory.SYSTEM,
+        severity=ErrorSeverity.LOW,
+        suppress_errors=True
+    )
+    def _on_truck_changed(self):
+        self._load_from_current_truck()
+        self.update_trailer_length_from_truck()
+        self.update_display()
+
+    @safe_method(
+        component="LoadCalculationWidget",
+        category=ErrorCategory.FILE_IO,
+        severity=ErrorSeverity.MEDIUM,
+        suppress_errors=True
+    )
     def _save_to_current_truck(self):
-        try:
-            app = self.get_app3d()
-            if not app or not hasattr(app, 'panda_widget'):
-                return
-            mgr = app.panda_widget.get_truck_manager()
-            if not mgr:
-                return
-            current = mgr.get_current()
-            current.load_settings = dict(self.calculator.settings)
-            # Also capture scene boxes for this truck
-            mgr.capture_now()
-        except Exception:
-            pass
+        app = self.get_app3d()
+        if not app or not hasattr(app, 'panda_widget'):
+            return
+        mgr = app.panda_widget.get_truck_manager()
+        if not mgr:
+            return
+        current = mgr.get_current()
+        current.load_settings = dict(self.calculator.settings)
+        mgr.capture_now()
 
+    @safe_method(
+        component="LoadCalculationWidget",
+        category=ErrorCategory.FILE_IO,
+        severity=ErrorSeverity.MEDIUM,
+        suppress_errors=True
+    )
     def _load_from_current_truck(self):
-        try:
-            app = self.get_app3d()
-            if not app or not hasattr(app, 'panda_widget'):
-                return
-            mgr = app.panda_widget.get_truck_manager()
-            if not mgr:
-                return
-            current = mgr.get_current()
-            if getattr(current, 'load_settings', None):
-                # Merge truck-specific settings
-                self.calculator.settings.update(current.load_settings)
-                self.calculator.settings_changed.emit()
-        except Exception:
-            pass
+        app = self.get_app3d()
+        if not app or not hasattr(app, 'panda_widget'):
+            return
+        mgr = app.panda_widget.get_truck_manager()
+        if not mgr:
+            return
+        current = mgr.get_current()
+        
+        self.calculator.settings = self.calculator.default_settings.copy()
+        
+        if getattr(current, 'load_settings', None):
+            self.calculator.settings.update(current.load_settings)
+        
+        self.calculator.settings_changed.emit()
+        self._sync_ui_from_settings()
+
+    @safe_method(
+        component="LoadCalculationWidget",
+        category=ErrorCategory.UI,
+        severity=ErrorSeverity.LOW,
+        suppress_errors=True
+    )
+    def _sync_ui_from_settings(self):
+        if hasattr(self, 'display_checkbox'):
+            old = self.display_checkbox.blockSignals(True)
+            self.display_checkbox.setChecked(self.calculator.get_setting('show_on_main_screen'))
+            self.display_checkbox.blockSignals(old)
+
+        if hasattr(self, 'tractor_inputs'):
+            for key, spin in self.tractor_inputs.items():
+                if key in self.calculator.settings:
+                    old = spin.blockSignals(True)
+                    spin.setValue(float(self.calculator.get_setting(key)))
+                    spin.blockSignals(old)
+
+        if hasattr(self, 'trailer_inputs'):
+            for key, spin in self.trailer_inputs.items():
+                if key in self.calculator.settings:
+                    old = spin.blockSignals(True)
+                    spin.setValue(float(self.calculator.get_setting(key)))
+                    spin.blockSignals(old)
+
+        if hasattr(self, 'cargo_inputs'):
+            for key, spin in self.cargo_inputs.items():
+                if key in self.calculator.settings:
+                    old = spin.blockSignals(True)
+                    spin.setValue(float(self.calculator.get_setting(key)))
+                    spin.blockSignals(old)
+
+        self.update_trailer_length_from_truck()
 
     def setup_ui(self):
         layout = QtWidgets.QVBoxLayout(self)
@@ -412,23 +472,28 @@ class LoadCalculationWidget(QtWidgets.QWidget, TranslatableMixin):
 
     def _on_setting_changed(self, key, value):
         self.calculator.update_setting(key, value)
+        # Save to current truck when settings change
+        self._save_to_current_truck()
         results = self.calculator.calculate_loads()
         if results:
             self.display_results(results)
             self._publish_results_to_main(results)
 
+    @safe_method(
+        component="LoadCalculationWidget",
+        category=ErrorCategory.UI,
+        severity=ErrorSeverity.LOW,
+        suppress_errors=True
+    )
     def _publish_results_to_main(self, results: dict):
-        try:
-            app = self.get_app3d()
-            if not app:
-                return
-            if hasattr(app, 'panda_widget') and app.panda_widget:
-                app.panda_widget.update_axle_results_overlay(
-                    visible=self.calculator.get_setting('show_on_main_screen'),
-                    results=results
-                )
-        except Exception:
-            pass
+        app = self.get_app3d()
+        if not app:
+            return
+        if hasattr(app, 'panda_widget') and app.panda_widget:
+            app.panda_widget.update_axle_results_overlay(
+                visible=self.calculator.get_setting('show_on_main_screen'),
+                results=results
+            )
 
     def retranslate_ui(self):
         self.title.setText(tr("Расчет нагрузок на оси"))

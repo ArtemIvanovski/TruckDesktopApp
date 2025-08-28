@@ -48,7 +48,8 @@ class TranslationManager(QObject):
             try:
                 with open(file_path, 'r', encoding='utf-8') as f:
                     self._translations_cache[language] = json.load(f)
-            except:
+            except (json.JSONDecodeError, IOError, UnicodeDecodeError) as e:
+                print(f"Failed to load translations for {language}: {e}")
                 self._translations_cache[language] = {}
         else:
             self._translations_cache[language] = {}
@@ -79,6 +80,10 @@ class TranslationManager(QObject):
 
 
 translation_manager = TranslationManager()
+
+
+def setup_translations():
+    pass
 
 
 def tr(key: str) -> str:

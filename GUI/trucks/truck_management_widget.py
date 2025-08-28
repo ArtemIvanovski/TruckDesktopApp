@@ -541,6 +541,17 @@ class TruckManagementWidget(QtWidgets.QWidget, TranslatableMixin):
             from core.trucks.truck_model import TruckModel
             truck = TruckModel(i + 1, truck_data['name'], 1650, 260, 245)
             truck.ready = truck_data.get('ready', False)
+            
+            # Initialize with default load calculation settings
+            default_load_settings = {
+                'Mt': 8.0, 'Nt_data': 2.5, 'Lt': 3.5, 'L_data': 0.4,
+                'Mp': 8.0, 'LC': 4.2, 'LB': 1.7, 'Ntp': 1.6,
+                'Mg1': 4.0, 'Mg2': 4.0, 'Mg3': 4.0, 'Mg4': 4.0,
+                'season_limit': False, 'show_on_main_screen': False,
+                'LA': 16.5  # Default truck length
+            }
+            truck.load_settings = default_load_settings.copy()
+            
             truck_manager.trucks.append(truck)
         
         truck_manager.current_index = self.current_truck_index

@@ -17,7 +17,6 @@ class GraphicsManager:
         self.main_light_np = None
         self.fill_light_np = None
 
-        # Попытаться загрузить настройки при инициализации
         self.load_settings()
 
     def load_settings(self, filepath="config/graphics_settings.json"):
@@ -147,12 +146,10 @@ class GraphicsManager:
 
         from panda3d.core import Vec4
 
-        # Ищем материал M_Body и обновляем его диффузный цвет
         materials = model.findAllMaterials()
         updated = False
         for material in materials:
             try:
-                # Проверяем по текущему цвету (голубо-синий M_Body материал)
                 current_diffuse = material.getDiffuse()
                 if (abs(current_diffuse.x - 0.185151) < 0.01 and
                         abs(current_diffuse.y - 0.322308) < 0.01 and
@@ -164,12 +161,10 @@ class GraphicsManager:
                 logger.warning(f"Could not check material diffuse color: {e}")
                 continue
 
-        # Также обновляем узлы с более тщательной проверкой
         for node in model.findAllMatches("**"):
             if node.hasMaterial():
                 mat = node.getMaterial()
                 try:
-                    # Проверяем по диффузному цвету (голубо-синий M_Body материал)
                     current_diffuse = mat.getDiffuse()
                     if (abs(current_diffuse.x - 0.185151) < 0.01 and
                             abs(current_diffuse.y - 0.322308) < 0.01 and
@@ -184,10 +179,8 @@ class GraphicsManager:
         if not updated:
             logger.warning(f"No truck materials found to update (looking for RGB(47, 82, 137))")
 
-        # Дополнительная попытка поиска по имени материала для OBJ/MTL файлов
         try:
             from panda3d.core import RenderState
-            # Попробуем найти узлы с именами, содержащими "Body" или "body"
             body_nodes = model.findAllMatches("**/+RenderState")
             for node in body_nodes:
                 node_name = node.getName().lower()
@@ -229,7 +222,6 @@ class GraphicsManager:
         if any(key in kwargs for key in ['grid_enabled', 'grid_opacity', 'grid_color', 'grid_spacing_x_cm', 'grid_spacing_y_cm']):
             self._apply_grid()
 
-        # Автосохранение настроек
         self.save_settings()
 
     def reset_graphics_settings(self):

@@ -4,9 +4,11 @@ from GUI.box.box_management_widget import BoxManagementWidget
 from GUI.load_calculation.load_calculation_widget import LoadCalculationWidget
 from GUI.trucks.truck_management_widget import TruckManagementWidget
 from core.i18n import tr, TranslatableMixin
+from core.error_management import ErrorReportingMixin, safe_method
+from core.exceptions import ErrorCategory, ErrorSeverity
 
 
-class LeftSidebar(QtWidgets.QWidget, TranslatableMixin):
+class LeftSidebar(QtWidgets.QWidget, TranslatableMixin, ErrorReportingMixin):
     toggled = QtCore.pyqtSignal(bool)
 
     def __init__(self, get_app3d, units_manager, parent=None):
@@ -129,12 +131,15 @@ class LeftSidebar(QtWidgets.QWidget, TranslatableMixin):
             if panel_type == "truck":
                 self.panel_container.setCurrentWidget(self.truck_panel)
                 current_panel_width = self.panel_width
+                # Update truck settings when truck panel is opened
+                self._update_truck_settings()
             elif panel_type == "boxes":
                 self.panel_container.setCurrentWidget(self.boxes_panel)
                 current_panel_width = self.panel_width
             elif panel_type == "loads":
                 self.panel_container.setCurrentWidget(self.loads_panel)
                 current_panel_width = self.loads_panel_width
+                self._update_loads_panel()
             elif panel_type == "trucks":
                 self.panel_container.setCurrentWidget(self.trucks_panel)
                 current_panel_width = self.panel_width
@@ -145,6 +150,18 @@ class LeftSidebar(QtWidgets.QWidget, TranslatableMixin):
             self.active_panel = panel_type
             self._update_button_states()
             self.toggled.emit(True)
+
+    @safe_method(
+        component="LeftSidebar",
+        category=ErrorCategory.UI,
+        severity=ErrorSeverity.LOW,
+        suppress_errors=True
+    )
+    def _update_loads_panel(self):
+        if hasattr(self, 'load_calculation') and self.load_calculation:
+            self.load_calculation.update_trailer_length_from_truck()
+            self.load_calculation._load_from_current_truck()
+            self.load_calculation.update_display()
 
     def _update_button_states(self):
         """Обновить состояния кнопок"""
@@ -280,8 +297,10 @@ class LeftSidebar(QtWidgets.QWidget, TranslatableMixin):
             ("Рефр", 1340, 239, 235),
             ("Тент 16.5", 1650, 260, 245),
         ]
-        grp = QtWidgets.QButtonGroup(self.presets_widget)
-        grp.setExclusive(True)
+        # Keep references to buttons for programmatic selection
+        self.preset_group = QtWidgets.QButtonGroup(self.presets_widget)
+        self.preset_group.setExclusive(True)
+        self.preset_buttons = []  # list of tuples: (rb, W, H, D)
         for title, W, H, D in presets:
             rb = QtWidgets.QRadioButton(title)
             rb.setStyleSheet("""
@@ -307,9 +326,10 @@ class LeftSidebar(QtWidgets.QWidget, TranslatableMixin):
                     color: #3498db;
                 }
             """)
-            grp.addButton(rb)
+            self.preset_group.addButton(rb)
             form.addRow(rb)
             rb.toggled.connect(lambda on, w=W, h=H, d=D: on and self._switch_truck(w, h, d))
+            self.preset_buttons.append((rb, W, H, D))
         lay.addWidget(self.presets_widget)
 
         # Custom size section
@@ -410,6 +430,11 @@ class LeftSidebar(QtWidgets.QWidget, TranslatableMixin):
         """)
         grid.addWidget(self.btn_apply, 3, 0, 1, 2)
         self.btn_apply.clicked.connect(self._apply_custom)
+        
+        # Connect size field changes to save settings
+        self.ed_w.editingFinished.connect(self._on_size_changed)
+        self.ed_h.editingFinished.connect(self._on_size_changed)
+        self.ed_d.editingFinished.connect(self._on_size_changed)
         self.custom_widget.hide()
         lay.addWidget(self.custom_widget)
 
@@ -496,19 +521,38 @@ class LeftSidebar(QtWidgets.QWidget, TranslatableMixin):
             return self.box_management.get_box_manager()
         return None
 
-    def _apply_custom(self):
-        try:
-            # Получаем значения в пользовательских единицах
-            w_user = float(self.ed_w.text())
-            h_user = float(self.ed_h.text())
-            d_user = float(self.ed_d.text())
+    @safe_method(
+        component="LeftSidebar",
+        category=ErrorCategory.USER_INPUT,
+        severity=ErrorSeverity.LOW,
+        suppress_errors=True
+    )
+    def _on_size_changed(self):
+        if self._truck_manager:
+            w_user = float(self.ed_w.text() or 0)
+            h_user = float(self.ed_h.text() or 0)
+            d_user = float(self.ed_d.text() or 0)
             
-            # Конвертируем в внутренние единицы (см)
-            w = int(self.units_manager.to_internal_distance(w_user))
-            h = int(self.units_manager.to_internal_distance(h_user))
-            d = int(self.units_manager.to_internal_distance(d_user))
-        except Exception:
-            return
+            if w_user > 0 and h_user > 0 and d_user > 0:
+                w = int(self.units_manager.to_internal_distance(w_user))
+                h = int(self.units_manager.to_internal_distance(h_user))
+                d = int(self.units_manager.to_internal_distance(d_user))
+                self._truck_manager.set_size_current(w, h, d)
+
+    @safe_method(
+        component="LeftSidebar",
+        category=ErrorCategory.USER_INPUT,
+        severity=ErrorSeverity.MEDIUM
+    )
+    def _apply_custom(self):
+        w_user = float(self.ed_w.text())
+        h_user = float(self.ed_h.text())
+        d_user = float(self.ed_d.text())
+        
+        w = int(self.units_manager.to_internal_distance(w_user))
+        h = int(self.units_manager.to_internal_distance(h_user))
+        d = int(self.units_manager.to_internal_distance(d_user))
+        
         self._switch_truck(w, h, d)
 
     def _reset_defaults(self):
@@ -539,11 +583,14 @@ class LeftSidebar(QtWidgets.QWidget, TranslatableMixin):
             self.custom_widget.hide()
             self.custom_btn.setText(f"⚙️ {tr('Свой размер')} ▼")
 
+    @safe_method(
+        component="LeftSidebar",
+        category=ErrorCategory.SYSTEM,
+        severity=ErrorSeverity.LOW,
+        fallback=None
+    )
     def _app3d(self):
-        try:
-            return self.get_app3d()
-        except Exception:
-            return None
+        return self.get_app3d()
 
     def _set_tent_alpha(self, a: float):
         app = self._app3d()
@@ -583,14 +630,21 @@ class LeftSidebar(QtWidgets.QWidget, TranslatableMixin):
         if app and hasattr(app, 'panda_widget') and app.panda_widget:
             truck_manager = app.panda_widget.get_truck_manager()
             if truck_manager:
-                truck_manager.add_on_changed(self._on_truck_changed)
-                self._update_truck_settings()
                 self._truck_manager = truck_manager
+                truck_manager.add_on_changed(self._on_truck_changed)
+                # Force update truck settings on initial connection
+                QtCore.QTimer.singleShot(100, self._update_truck_settings)
             else:
                 QtCore.QTimer.singleShot(1000, self._try_connect_truck_manager)
         else:
             QtCore.QTimer.singleShot(1000, self._try_connect_truck_manager)
 
+    @safe_method(
+        component="LeftSidebar",
+        category=ErrorCategory.SYSTEM,
+        severity=ErrorSeverity.LOW,
+        suppress_errors=True
+    )
     def _save_current_truck_ui_settings(self):
         if not self._truck_manager:
             return
@@ -602,19 +656,34 @@ class LeftSidebar(QtWidgets.QWidget, TranslatableMixin):
             current.tent_alpha = 0.0 if current.tent_open else 0.3
         
         if hasattr(self, 'ed_w') and hasattr(self, 'ed_h') and hasattr(self, 'ed_d'):
-            try:
-                w_user = float(self.ed_w.text())
-                h_user = float(self.ed_h.text())
-                d_user = float(self.ed_d.text())
-                
-                current.width = int(self.units_manager.to_internal_distance(w_user))
-                current.height = int(self.units_manager.to_internal_distance(h_user))
-                current.depth = int(self.units_manager.to_internal_distance(d_user))
-            except:
-                pass
+            self._save_dimensions_to_truck(current)
 
+    @safe_method(
+        component="LeftSidebar",
+        category=ErrorCategory.USER_INPUT,
+        severity=ErrorSeverity.LOW,
+        suppress_errors=True
+    )
+    def _save_dimensions_to_truck(self, current):
+        w_user = float(self.ed_w.text())
+        h_user = float(self.ed_h.text())
+        d_user = float(self.ed_d.text())
+        
+        current.width = int(self.units_manager.to_internal_distance(w_user))
+        current.height = int(self.units_manager.to_internal_distance(h_user))
+        current.depth = int(self.units_manager.to_internal_distance(d_user))
+
+    @safe_method(
+        component="LeftSidebar",
+        category=ErrorCategory.SYSTEM,
+        severity=ErrorSeverity.LOW,
+        suppress_errors=True
+    )
     def _on_truck_changed(self):
         self._update_truck_settings()
+        if hasattr(self, 'load_calculation') and self.load_calculation:
+            self.load_calculation.update_trailer_length_from_truck()
+            self.load_calculation.update_display()
 
     def _update_truck_settings(self):
         app = self._app3d()
@@ -637,12 +706,31 @@ class LeftSidebar(QtWidgets.QWidget, TranslatableMixin):
             self.ed_h.setText(str(round(h_user, 1)))
             self.ed_d.setText(str(round(d_user, 1)))
         
-        # Обновляем состояние тента
+        self._update_preset_buttons(current)
+
         if hasattr(self, 'btn_open') and hasattr(self, 'btn_close'):
             if current.tent_open:
                 self.btn_open.setChecked(True)
             else:
                 self.btn_close.setChecked(True)
+
+    @safe_method(
+        component="LeftSidebar",
+        category=ErrorCategory.UI,
+        severity=ErrorSeverity.LOW,
+        suppress_errors=True
+    )
+    def _update_preset_buttons(self, current):
+        if hasattr(self, 'preset_buttons'):
+            for rb, W, H, D in self.preset_buttons:
+                if int(current.width) == int(W) and int(current.height) == int(H) and int(current.depth) == int(D):
+                    old = rb.blockSignals(True)
+                    rb.setChecked(True)
+                    rb.blockSignals(old)
+                else:
+                    old = rb.blockSignals(True)
+                    rb.setChecked(False)
+                    rb.blockSignals(old)
 
     def retranslate_ui(self):
         self.btn_truck.setText(tr("Кузов"))
